@@ -15,13 +15,16 @@ export default function AuthCallbackPage() {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (error) {
           console.error('[auth/callback] exchangeCodeForSession failed', error);
-          window.location.href = '/login';
+          window.location.replace('/login');
           return;
         }
       }
 
       const { data } = await supabase.auth.getSession();
-      window.location.href = data.session ? '/dashboard' : '/login';
+      // Use replace + cache-busting query so the target page isn't served
+      // from a stale Vercel edge cache after the OAuth round-trip.
+      const target = data.session ? '/dashboard' : '/login';
+      window.location.replace(`${target}?t=${Date.now()}`);
     })();
   }, []);
 
