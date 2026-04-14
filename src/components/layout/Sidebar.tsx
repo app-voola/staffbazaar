@@ -90,7 +90,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const handleLogout = async () => {
     onNavigate?.();
     await logout();
-    window.location.href = '/signup';
+    window.location.href = '/login';
   };
 
   const { count: savedCount } = useSavedStaff();
