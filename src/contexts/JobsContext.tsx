@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import { type MockJob, type JobStatus } from '@/services/mock/jobs';
 
 interface JobsContextValue {
@@ -83,20 +84,33 @@ function jobToRow(j: Partial<MockJob>): Partial<JobRow> {
 }
 
 export function JobsProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [jobs, setJobs] = useState<MockJob[]>([]);
   const [postsUsed, setPostsUsed] = useState(0);
   const [postsLimit, setPostsLimit] = useState(3);
   const [loading, setLoading] = useState(true);
 
-  // Initial load + realtime subscription
+  // Initial load + realtime subscription (per-owner, re-runs when user changes)
   useEffect(() => {
+    if (!user) {
+      setJobs([]);
+      setPostsUsed(0);
+      setPostsLimit(3);
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
 
     (async () => {
       const [{ data: jobRows, error: jobErr }, { data: settings, error: setErr }] =
         await Promise.all([
           supabase.from('jobs').select('*').order('created_at', { ascending: false }),
-          supabase.from('app_settings').select('posts_used, posts_limit').eq('id', 1).single(),
+          supabase
+            .from('app_settings')
+            .select('posts_used, posts_limit')
+            .eq('owner_id', user.id)
+            .maybeSingle(),
         ]);
 
       if (cancelled) return;
@@ -105,9 +119,17 @@ export function JobsProvider({ children }: { children: ReactNode }) {
       else if (jobRows) setJobs((jobRows as JobRow[]).map(rowToJob));
 
       if (setErr) console.error('[app_settings] load failed', setErr);
-      else if (settings) {
+      if (settings) {
         setPostsUsed(settings.posts_used ?? 0);
         setPostsLimit(settings.posts_limit ?? 3);
+      } else {
+        // First login: create the owner's quota row with defaults.
+        const { error: insErr } = await supabase
+          .from('app_settings')
+          .insert({ owner_id: user.id, posts_used: 0, posts_limit: 3 });
+        if (insErr) console.error('[app_settings] auto-create failed', insErr);
+        setPostsUsed(0);
+        setPostsLimit(3);
       }
 
       setLoading(false);
@@ -153,10 +175,12 @@ export function JobsProvider({ children }: { children: ReactNode }) {
       supabase.removeChannel(jobsChannel);
       supabase.removeChannel(settingsChannel);
     };
-  }, []);
+  }, [user?.id]);
 
   const addJob = useCallback<JobsContextValue['addJob']>(
     async (job, opts) => {
+      if (!user) throw new Error('Not signed in');
+
       const created: MockJob = {
         ...job,
         id: job.id ?? `job-${Date.now()}`,
@@ -164,7 +188,9 @@ export function JobsProvider({ children }: { children: ReactNode }) {
 
       setJobs((prev) => (prev.some((j) => j.id === created.id) ? prev : [created, ...prev]));
 
-      const { error } = await supabase.from('jobs').insert(jobToRow(created));
+      const { error } = await supabase
+        .from('jobs')
+        .insert({ ...jobToRow(created), owner_id: user.id });
       if (error) {
         console.error('[jobs] insert failed', error);
         setJobs((prev) => prev.filter((j) => j.id !== created.id));
@@ -177,7 +203,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
         const { error: qErr } = await supabase
           .from('app_settings')
           .update({ posts_used: next })
-          .eq('id', 1);
+          .eq('owner_id', user.id);
         if (qErr) {
           console.error('[app_settings] quota update failed', qErr);
           setPostsUsed(postsUsed);
@@ -186,7 +212,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
 
       return created;
     },
-    [postsUsed],
+    [postsUsed, user],
   );
 
   const updateJob = useCallback<JobsContextValue['updateJob']>(async (id, patch) => {

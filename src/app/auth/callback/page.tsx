@@ -1,23 +1,29 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 export default function AuthCallbackPage() {
-  const router = useRouter();
-
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase.auth.getSession();
-      if (error) {
-        console.error('[auth/callback] getSession failed', error);
-        router.replace('/login');
-        return;
+      // Supabase's PKCE OAuth flow returns ?code=... in the URL. Exchange it
+      // for a session, then hard-redirect so AuthContext remounts with it.
+      const url = new URL(window.location.href);
+      const code = url.searchParams.get('code');
+
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          console.error('[auth/callback] exchangeCodeForSession failed', error);
+          window.location.href = '/login';
+          return;
+        }
       }
-      router.replace(data.session ? '/dashboard' : '/login');
+
+      const { data } = await supabase.auth.getSession();
+      window.location.href = data.session ? '/dashboard' : '/login';
     })();
-  }, [router]);
+  }, []);
 
   return (
     <div

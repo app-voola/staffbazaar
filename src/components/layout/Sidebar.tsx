@@ -81,12 +81,18 @@ const baseMain: NavItem[] = [
 const settingsItems = [
   { href: '/restaurant-profile', label: 'Restaurant Profile', icon: StoreIcon },
   { href: '/profile', label: 'My Profile', icon: UserIcon },
-  { href: '/login', label: 'Log In', icon: LoginIcon },
 ];
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-  const { user, restaurant } = useAuth();
+  const { user, restaurant, logout } = useAuth();
+
+  const handleLogout = async () => {
+    onNavigate?.();
+    await logout();
+    window.location.href = '/login';
+  };
+
   const { count: savedCount } = useSavedStaff();
   const { unreadCount } = useMessages();
   const mainItems: NavItem[] = baseMain.map((item) => {
@@ -137,6 +143,22 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <span>{item.label}</span>
         </Link>
       ))}
+      <button
+        type="button"
+        className="sidebar-nav-item"
+        onClick={handleLogout}
+        style={{
+          background: 'none',
+          border: 'none',
+          width: '100%',
+          textAlign: 'left',
+          cursor: 'pointer',
+          font: 'inherit',
+        }}
+      >
+        {LoginIcon}
+        <span>Log Out</span>
+      </button>
 
       <Link
         href="/profile"

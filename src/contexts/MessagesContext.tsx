@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import { type MockConversation, type MockMessage } from '@/services/mock/conversations';
 
 interface MessagesContextValue {
@@ -67,10 +68,17 @@ function rowToConv(r: ConversationRow, messages: MockMessage[]): MockConversatio
 }
 
 export function MessagesProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [conversations, setConversations] = useState<MockConversation[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!user) {
+      setConversations([]);
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
 
     (async () => {
@@ -169,7 +177,7 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
       supabase.removeChannel(convChannel);
       supabase.removeChannel(msgChannel);
     };
-  }, []);
+  }, [user?.id]);
 
   const send = useCallback<MessagesContextValue['send']>(async (convId, text) => {
     const msg: MockMessage = {

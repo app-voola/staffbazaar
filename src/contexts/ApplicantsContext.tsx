@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import { type MockApplicant, type ApplicantStage } from '@/services/mock/applicants';
 
 interface ApplicantsContextValue {
@@ -53,10 +54,17 @@ function rowToApplicant(r: ApplicantRow): MockApplicant {
 }
 
 export function ApplicantsProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [applicants, setApplicants] = useState<MockApplicant[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!user) {
+      setApplicants([]);
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
 
     (async () => {
@@ -99,7 +107,7 @@ export function ApplicantsProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [user?.id]);
 
   const byJob = useCallback(
     (jobId: string) => applicants.filter((a) => a.jobId === jobId),
