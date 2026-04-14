@@ -1,40 +1,122 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { OTPInput } from '@/components/ui/OTPInput';
-import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 
-type Step = 'phone' | 'otp';
+type Step = 'email' | 'otp';
+type Role = 'worker' | 'owner';
+
+const RESEND_SECONDS = 30;
 
 export default function LoginPage() {
-  const { login } = useAuth();
   const router = useRouter();
-  const [step, setStep] = useState<Step>('phone');
-  const [role, setRole] = useState<'worker' | 'owner'>('worker');
-  const [phone, setPhone] = useState('');
+  const [step, setStep] = useState<Step>('email');
+  const [role, setRole] = useState<Role>('worker');
+  const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
+  const [sending, setSending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [resendLeft, setResendLeft] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const sendOtp = (e: React.FormEvent) => {
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
+  const startResendTimer = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setResendLeft(RESEND_SECONDS);
+    timerRef.current = setInterval(() => {
+      setResendLeft((s) => {
+        if (s <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+  };
+
+  const sendCode = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (phone.replace(/\D/g, '').length < 10) {
-      setError('Enter a valid 10-digit number');
+    const trimmed = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setError('Enter a valid email address');
       return;
     }
     setError('');
-    setStep('otp');
-  };
-
-  const verifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (otp !== '123456') {
-      setError('Invalid OTP. Use 123456 for the demo.');
+    setSending(true);
+    const { error: otpErr } = await supabase.auth.signInWithOtp({
+      email: trimmed,
+      options: { shouldCreateUser: true },
+    });
+    setSending(false);
+    if (otpErr) {
+      setError(otpErr.message);
       return;
     }
-    await login();
-    router.push(role === 'owner' ? '/dashboard' : '/dashboard');
+    setStep('otp');
+    startResendTimer();
+  };
+
+  const resendCode = async () => {
+    if (resendLeft > 0 || sending) return;
+    setOtp('');
+    setError('');
+    setSending(true);
+    const { error: otpErr } = await supabase.auth.signInWithOtp({
+      email: email.trim(),
+      options: { shouldCreateUser: true },
+    });
+    setSending(false);
+    if (otpErr) {
+      setError(otpErr.message);
+      return;
+    }
+    startResendTimer();
+  };
+
+  const backToEmail = () => {
+    setStep('email');
+    setOtp('');
+    setError('');
+    if (timerRef.current) clearInterval(timerRef.current);
+    setResendLeft(0);
+  };
+
+  const verifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (otp.length < 6) return;
+    setError('');
+    setVerifying(true);
+    const { error: vErr } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token: otp,
+      type: 'email',
+    });
+    if (vErr) {
+      setVerifying(false);
+      setError(vErr.message);
+      return;
+    }
+    router.push('/dashboard');
+  };
+
+  const signInWithGoogle = async () => {
+    setError('');
+    const { error: gErr } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    if (gErr) setError(gErr.message);
   };
 
   return (
@@ -44,10 +126,10 @@ export default function LoginPage() {
           Staff<em>Bazaar</em>
         </Link>
 
-        {step === 'phone' ? (
+        {step === 'email' ? (
           <>
             <h1 className="auth-heading">Welcome back</h1>
-            <p className="auth-sub">Log in with your phone number</p>
+            <p className="auth-sub">Log in with your email</p>
 
             <div className="role-toggle">
               <button
@@ -66,25 +148,30 @@ export default function LoginPage() {
               </button>
             </div>
 
-            <form onSubmit={sendOtp} noValidate>
+            <form onSubmit={sendCode} noValidate>
               <div className="field">
-                <label htmlFor="loginPhone">Phone number</label>
-                <div className="phone-input-wrap">
-                  <span className="phone-prefix">+91</span>
-                  <input
-                    type="tel"
-                    id="loginPhone"
-                    placeholder="98765 43210"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                    autoComplete="tel"
-                    maxLength={10}
-                  />
-                </div>
-                {error && <div style={{ color: '#DC2626', fontSize: 12, marginTop: 6 }}>{error}</div>}
+                <label htmlFor="loginEmail">Email address</label>
+                <input
+                  type="email"
+                  id="loginEmail"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  required
+                />
+                {error && (
+                  <div style={{ color: '#DC2626', fontSize: 12, marginTop: 6 }}>{error}</div>
+                )}
               </div>
-              <button type="submit" className="btn-next" style={{ width: '100%' }}>
-                Send OTP
+
+              <button
+                type="submit"
+                className="btn-next"
+                style={{ width: '100%' }}
+                disabled={sending}
+              >
+                {sending ? 'Sending…' : 'Send Code'}
               </button>
             </form>
 
@@ -92,7 +179,7 @@ export default function LoginPage() {
               <span>or continue with</span>
             </div>
 
-            <button type="button" className="btn-social">
+            <button type="button" className="btn-social" onClick={signInWithGoogle}>
               <svg viewBox="0 0 24 24">
                 <path
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
@@ -123,43 +210,112 @@ export default function LoginPage() {
             <button
               type="button"
               className="back-link"
-              onClick={() => {
-                setStep('phone');
-                setOtp('');
-                setError('');
-              }}
+              onClick={backToEmail}
               style={{ background: 'none', border: 'none', cursor: 'pointer' }}
             >
-              ← Back
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="19" y1="12" x2="5" y2="12" />
+                <polyline points="12 19 5 12 12 5" />
+              </svg>
+              Back
             </button>
+
             <h1 className="auth-heading">Enter code</h1>
             <p className="otp-sent-msg">
               We sent a 6-digit code to
               <br />
-              <strong>+91 {phone}</strong>
+              <strong>{email}</strong>
             </p>
-            <form onSubmit={verifyOtp} noValidate>
+
+            <form onSubmit={verifyCode} noValidate>
               <OTPInput value={otp} onChange={setOtp} />
+
               {error && (
-                <div style={{ color: '#DC2626', fontSize: 13, textAlign: 'center', marginBottom: 16 }}>
+                <div
+                  style={{ color: '#DC2626', fontSize: 13, textAlign: 'center', marginBottom: 12 }}
+                >
                   {error}
                 </div>
               )}
-              <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--stone)', marginBottom: 16 }}>
-                Demo OTP: <strong>123456</strong>
-              </p>
+
+              <div className="resend-row">
+                <button
+                  type="button"
+                  className="resend-link"
+                  disabled={resendLeft > 0 || sending}
+                  onClick={resendCode}
+                >
+                  Resend code
+                </button>
+                {resendLeft > 0 && (
+                  <span> in 0:{String(resendLeft).padStart(2, '0')}</span>
+                )}
+              </div>
+
               <button
                 type="submit"
                 className="btn-next"
                 style={{ width: '100%' }}
-                disabled={otp.length !== 6}
+                disabled={otp.length !== 6 || verifying}
               >
-                Verify &amp; Log In
+                {verifying ? 'Verifying…' : 'Verify & Log In'}
               </button>
             </form>
           </>
         )}
       </div>
+
+      <style>{`
+        .auth-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
+        .auth-card { width: 100%; max-width: 440px; background: white; border-radius: var(--radius-lg); padding: 40px 36px; box-shadow: var(--shadow-md); position: relative; }
+        .auth-logo { font-family: var(--font-display); font-size: 28px; color: var(--charcoal); text-decoration: none; display: block; text-align: center; margin-bottom: 32px; }
+        .auth-logo em { color: var(--ember); font-style: italic; }
+        .auth-heading { font-family: var(--font-display); font-size: 32px; text-align: center; margin-bottom: 4px; }
+        .auth-sub { text-align: center; font-size: 15px; color: var(--charcoal-light); margin-bottom: 28px; }
+        .role-toggle { display: flex; background: var(--cream); border-radius: 100px; padding: 4px; margin-bottom: 28px; }
+        .role-toggle button { flex: 1; padding: 12px 8px; border-radius: 100px; font-size: 13px; font-weight: 600; font-family: var(--font-body); border: none; cursor: pointer; background: transparent; color: var(--charcoal-light); transition: all 0.25s; white-space: nowrap; }
+        .role-toggle button.active { background: white; color: var(--charcoal); box-shadow: var(--shadow-sm); }
+        .field { margin-bottom: 16px; }
+        .field label { display: block; font-size: 13px; font-weight: 600; color: var(--charcoal); margin-bottom: 8px; }
+        .field input { width: 100%; padding: 14px 16px; border: 1.5px solid var(--sand); border-radius: var(--radius-md); background: white; font-size: 15px; font-family: var(--font-body); color: var(--charcoal); transition: border-color 0.2s; }
+        .field input:focus { outline: none; border-color: var(--ember); }
+        .btn-next { margin-top: 8px; padding: 14px 20px; border-radius: 100px; font-size: 15px; font-weight: 700; font-family: var(--font-body); background: var(--ember); color: white; border: none; cursor: pointer; transition: all 0.2s; }
+        .btn-next:hover:not(:disabled) { background: #C7421A; transform: translateY(-1px); box-shadow: 0 8px 22px rgba(220,74,26,0.28); }
+        .btn-next:disabled { opacity: 0.55; cursor: not-allowed; }
+        .otp-sent-msg { text-align: center; font-size: 15px; color: var(--charcoal-light); margin-bottom: 24px; line-height: 1.5; }
+        .otp-sent-msg strong { color: var(--charcoal); }
+        .otp-boxes { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
+        .otp-boxes input { width: 52px; height: 60px; text-align: center; font-size: 24px; font-weight: 700; font-family: var(--font-body); border: 2px solid var(--sand); border-radius: var(--radius-md); background: white; color: var(--charcoal); transition: border-color 0.2s; -webkit-appearance: none; }
+        .otp-boxes input:focus { outline: none; border-color: var(--ember); }
+        .otp-boxes input.filled { border-color: var(--ember); background: var(--ember-glow); }
+        .resend-row { text-align: center; margin-bottom: 20px; font-size: 13px; color: var(--charcoal-light); }
+        .resend-link { color: var(--ember); font-weight: 600; text-decoration: none; cursor: pointer; border: none; background: none; font-size: 13px; font-family: var(--font-body); padding: 0; }
+        .resend-link:hover:not(:disabled) { text-decoration: underline; }
+        .resend-link:disabled { color: var(--stone); cursor: not-allowed; text-decoration: none; }
+        .back-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--charcoal-light); text-decoration: none; margin-bottom: 16px; transition: color 0.2s; padding: 0; }
+        .back-link:hover { color: var(--ember); }
+        .back-link svg { width: 16px; height: 16px; }
+        .divider { display: flex; align-items: center; gap: 16px; margin: 24px 0; }
+        .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--sand); }
+        .divider span { font-size: 12px; color: var(--stone); font-weight: 500; white-space: nowrap; }
+        .btn-social { width: 100%; padding: 13px; border-radius: var(--radius-md); font-size: 15px; font-weight: 600; font-family: var(--font-body); background: white; color: var(--charcoal); border: 1.5px solid var(--sand); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: all 0.2s; }
+        .btn-social:hover { border-color: var(--charcoal-light); background: var(--cream); }
+        .btn-social svg { width: 20px; height: 20px; }
+        .auth-footer { text-align: center; margin-top: 28px; font-size: 14px; color: var(--charcoal-light); }
+        .auth-footer a { color: var(--ember); font-weight: 700; text-decoration: none; }
+        .auth-footer a:hover { text-decoration: underline; }
+        @media (max-width: 480px) {
+          .auth-card { padding: 32px 24px; border-radius: var(--radius-md); }
+          .auth-heading { font-size: 26px; }
+        }
+      `}</style>
     </div>
   );
 }
