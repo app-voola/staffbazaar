@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { UnsavedPill } from '@/components/ui/UnsavedPill';
 
 interface FormState {
@@ -13,9 +14,9 @@ interface FormState {
   language: 'English' | 'Hindi';
 }
 
-const INITIAL: FormState = {
-  fullName: 'Raj Kumar',
-  email: 'raj@spicegarden.in',
+const DEFAULTS: FormState = {
+  fullName: '',
+  email: '',
   notifyApplicants: true,
   notifyWhatsapp: true,
   language: 'English',
@@ -23,12 +24,51 @@ const INITIAL: FormState = {
 
 export function OwnerProfileForm() {
   const { user } = useAuth();
-  const [form, setForm] = useState<FormState>(INITIAL);
-  const [saved, setSaved] = useState<FormState>(INITIAL);
+  const [form, setForm] = useState<FormState>(DEFAULTS);
+  const [saved, setSaved] = useState<FormState>(DEFAULTS);
   const [toast, setToast] = useState('');
+
+  // Hydrate from the logged-in user whenever they change.
+  useEffect(() => {
+    if (!user) return;
+    const next: FormState = {
+      ...DEFAULTS,
+      fullName: user.full_name ?? '',
+      email: user.full_name?.includes('@') ? user.full_name : '',
+    };
+    setForm(next);
+    setSaved(next);
+  }, [user?.id]);
+
+  // Pull email straight from the Supabase session, since AuthContext stuffs
+  // it into full_name only when no other name is available.
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      const email = data.user?.email ?? '';
+      if (!email) return;
+      setForm((f) => (f.email ? f : { ...f, email }));
+      setSaved((s) => (s.email ? s : { ...s, email }));
+    })();
+  }, [user?.id]);
 
   const dirty = JSON.stringify(form) !== JSON.stringify(saved);
   const update = (patch: Partial<FormState>) => setForm((f) => ({ ...f, ...patch }));
+
+  const handleSave = async () => {
+    const { error } = await supabase.auth.updateUser({
+      email: form.email || undefined,
+      data: { full_name: form.fullName },
+    });
+    if (error) {
+      setToast(`Save failed: ${error.message}`);
+      setTimeout(() => setToast(''), 3000);
+      return;
+    }
+    setSaved(form);
+    setToast('Profile saved');
+    setTimeout(() => setToast(''), 2000);
+  };
 
   return (
     <>
@@ -117,15 +157,7 @@ export function OwnerProfileForm() {
 
       </div>
 
-      <UnsavedPill
-        show={dirty}
-        onDiscard={() => setForm(saved)}
-        onSave={() => {
-          setSaved(form);
-          setToast('Profile saved');
-          setTimeout(() => setToast(''), 2000);
-        }}
-      />
+      <UnsavedPill show={dirty} onDiscard={() => setForm(saved)} onSave={handleSave} />
 
       {toast && (
         <div className="sb-toast show">

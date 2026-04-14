@@ -185,12 +185,29 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         >
           {initial}
         </div>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--charcoal)' }}>
-            {user?.full_name?.split(' ')[0] ?? 'Guest'}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: 'var(--charcoal)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {user?.full_name ?? 'Guest'}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--stone)' }}>
-            {restaurant?.name ?? 'No restaurant'}
+          <div
+            style={{
+              fontSize: 11,
+              color: 'var(--stone)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {restaurant?.name ?? 'StaffBazaar'}
           </div>
         </div>
       </Link>
