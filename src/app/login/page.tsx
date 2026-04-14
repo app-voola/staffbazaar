@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { OTPInput } from '@/components/ui/OTPInput';
 import { supabase } from '@/lib/supabase';
 
@@ -12,7 +11,6 @@ type Role = 'worker' | 'owner';
 const RESEND_SECONDS = 30;
 
 export default function LoginPage() {
-  const router = useRouter();
   const [step, setStep] = useState<Step>('email');
   const [role, setRole] = useState<Role>('worker');
   const [email, setEmail] = useState('');
@@ -105,7 +103,7 @@ export default function LoginPage() {
       setError(vErr.message);
       return;
     }
-    router.push('/dashboard');
+    window.location.href = '/dashboard';
   };
 
   const signInWithGoogle = async () => {

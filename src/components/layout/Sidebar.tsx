@@ -54,6 +54,13 @@ const UserIcon = (
     <path d="M5.5 21a8.38 8.38 0 0 1 13 0" />
   </svg>
 );
+const LoginIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+    <polyline points="10 17 15 12 10 7" />
+    <line x1="15" y1="12" x2="3" y2="12" />
+  </svg>
+);
 
 interface NavItem {
   href: string;
@@ -74,6 +81,7 @@ const baseMain: NavItem[] = [
 const settingsItems = [
   { href: '/restaurant-profile', label: 'Restaurant Profile', icon: StoreIcon },
   { href: '/profile', label: 'My Profile', icon: UserIcon },
+  { href: '/login', label: 'Log In', icon: LoginIcon },
 ];
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {

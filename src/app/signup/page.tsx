@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { OTPInput } from '@/components/ui/OTPInput';
 import { supabase } from '@/lib/supabase';
 
@@ -12,7 +11,6 @@ type Step = 1 | 2 | 3;
 const RESEND_SECONDS = 30;
 
 export default function SignupPage() {
-  const router = useRouter();
   const [step, setStep] = useState<Step>(1);
   const [role, setRole] = useState<Role | null>(null);
   const [fullName, setFullName] = useState('');
@@ -137,7 +135,7 @@ export default function SignupPage() {
       setError(vErr.message);
       return;
     }
-    router.push(role === 'owner' ? '/onboarding' : '/dashboard');
+    window.location.href = role === 'owner' ? '/onboarding' : '/dashboard';
   };
 
   return (
