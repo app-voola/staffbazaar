@@ -22,7 +22,7 @@ const INITIAL: FormState = {
 };
 
 export function OwnerProfileForm() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [form, setForm] = useState<FormState>(INITIAL);
   const [saved, setSaved] = useState<FormState>(INITIAL);
   const [toast, setToast] = useState('');
@@ -115,31 +115,6 @@ export function OwnerProfileForm() {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={async () => {
-            await logout();
-            window.location.href = '/login';
-          }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            width: '100%',
-            padding: 14,
-            borderRadius: 'var(--radius-md)',
-            fontSize: 15,
-            fontWeight: 600,
-            color: '#DC2626',
-            background: 'transparent',
-            border: '1.5px solid #FECACA',
-            cursor: 'pointer',
-            marginTop: 28,
-          }}
-        >
-          Log Out
-        </button>
       </div>
 
       <UnsavedPill

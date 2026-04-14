@@ -4,11 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
-type Role = 'worker' | 'owner';
-
 export default function LoginPage() {
-  const [role, setRole] = useState<Role>('worker');
-  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -39,40 +35,6 @@ export default function LoginPage() {
     window.location.href = '/dashboard';
   };
 
-  const signUp = async () => {
-    if (!fullName.trim()) {
-      setError('Please enter your full name');
-      return;
-    }
-    const trimmed = email.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setError('Enter a valid email address');
-      return;
-    }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
-    setError('');
-    setBusy(true);
-    const { data, error: sErr } = await supabase.auth.signUp({
-      email: trimmed,
-      password,
-      options: { data: { full_name: fullName.trim(), role } },
-    });
-    if (sErr) {
-      setBusy(false);
-      setError(sErr.message);
-      return;
-    }
-    if (data.session) {
-      window.location.href = '/dashboard';
-    } else {
-      setBusy(false);
-      setError('Account created. Check your email to confirm, then log in.');
-    }
-  };
-
   const signInWithGoogle = async () => {
     setError('');
     const { error: gErr } = await supabase.auth.signInWithOAuth({
@@ -92,38 +54,9 @@ export default function LoginPage() {
         </Link>
 
         <h1 className="auth-heading">Welcome back</h1>
-        <p className="auth-sub">Log in or create an account</p>
-
-        <div className="role-toggle">
-          <button
-            type="button"
-            className={role === 'worker' ? 'active' : ''}
-            onClick={() => setRole('worker')}
-          >
-            I&apos;m a Worker
-          </button>
-          <button
-            type="button"
-            className={role === 'owner' ? 'active' : ''}
-            onClick={() => setRole('owner')}
-          >
-            I&apos;m an Owner
-          </button>
-        </div>
+        <p className="auth-sub">Log in with your email and password</p>
 
         <form onSubmit={signIn} noValidate>
-          <div className="field">
-            <label htmlFor="loginName">Full name</label>
-            <input
-              type="text"
-              id="loginName"
-              placeholder="your full name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              autoComplete="name"
-            />
-          </div>
-
           <div className="field">
             <label htmlFor="loginEmail">Email address</label>
             <input
@@ -162,27 +95,6 @@ export default function LoginPage() {
           >
             {busy ? 'Please wait…' : 'Log In'}
           </button>
-
-          <button
-            type="button"
-            onClick={signUp}
-            disabled={busy}
-            style={{
-              width: '100%',
-              marginTop: 10,
-              padding: '12px 16px',
-              borderRadius: 100,
-              background: 'white',
-              color: 'var(--ember)',
-              border: '1.5px solid var(--ember)',
-              fontFamily: 'var(--font-body)',
-              fontWeight: 700,
-              fontSize: 14,
-              cursor: 'pointer',
-            }}
-          >
-            Create account
-          </button>
         </form>
 
         <div className="divider">
@@ -212,7 +124,7 @@ export default function LoginPage() {
         </button>
 
         <p className="auth-footer">
-          Don&apos;t have an account? Fill the form and click <strong>Create account</strong>.
+          Don&apos;t have an account? <Link href="/signup">Sign up for free</Link>
         </p>
       </div>
 
@@ -223,9 +135,6 @@ export default function LoginPage() {
         .auth-logo em { color: var(--ember); font-style: italic; }
         .auth-heading { font-family: var(--font-display); font-size: 32px; text-align: center; margin-bottom: 4px; }
         .auth-sub { text-align: center; font-size: 15px; color: var(--charcoal-light); margin-bottom: 28px; }
-        .role-toggle { display: flex; background: var(--cream); border-radius: 100px; padding: 4px; margin-bottom: 20px; }
-        .role-toggle button { flex: 1; padding: 12px 8px; border-radius: 100px; font-size: 13px; font-weight: 600; font-family: var(--font-body); border: none; cursor: pointer; background: transparent; color: var(--charcoal-light); transition: all 0.25s; white-space: nowrap; }
-        .role-toggle button.active { background: white; color: var(--charcoal); box-shadow: var(--shadow-sm); }
         .field { margin-bottom: 14px; }
         .field label { display: block; font-size: 13px; font-weight: 600; color: var(--charcoal); margin-bottom: 8px; }
         .field input { width: 100%; padding: 14px 16px; border: 1.5px solid var(--sand); border-radius: var(--radius-md); background: white; font-size: 15px; font-family: var(--font-body); color: var(--charcoal); transition: border-color 0.2s; }
@@ -239,8 +148,9 @@ export default function LoginPage() {
         .btn-social { width: 100%; padding: 13px; border-radius: var(--radius-md); font-size: 15px; font-weight: 600; font-family: var(--font-body); background: white; color: var(--charcoal); border: 1.5px solid var(--sand); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: all 0.2s; }
         .btn-social:hover { border-color: var(--charcoal-light); background: var(--cream); }
         .btn-social svg { width: 20px; height: 20px; }
-        .auth-footer { text-align: center; margin-top: 28px; font-size: 13px; color: var(--charcoal-light); }
-        .auth-footer strong { color: var(--charcoal); }
+        .auth-footer { text-align: center; margin-top: 28px; font-size: 14px; color: var(--charcoal-light); }
+        .auth-footer a { color: var(--ember); font-weight: 700; text-decoration: none; }
+        .auth-footer a:hover { text-decoration: underline; }
         @media (max-width: 480px) {
           .auth-card { padding: 32px 24px; border-radius: var(--radius-md); }
           .auth-heading { font-size: 26px; }

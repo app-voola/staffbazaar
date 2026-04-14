@@ -1,45 +1,71 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { OTPInput } from '@/components/ui/OTPInput';
 import { supabase } from '@/lib/supabase';
 
 type Role = 'worker' | 'owner';
-type Step = 1 | 2 | 3;
+type Step = 1 | 2;
 
-const RESEND_SECONDS = 30;
+// Supabase Auth needs an email + password to sign in, so we derive synthetic
+// credentials from the phone number. The phone is also stored in
+// user_metadata for display.
+const synthEmail = (phone: string) => `${phone}@demo.staffbazaar.local`;
+const synthPassword = (phone: string) => `sb-${phone}-${phone}`;
 
 export default function SignupPage() {
   const [step, setStep] = useState<Step>(1);
   const [role, setRole] = useState<Role | null>(null);
   const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState('');
+  const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
-  const [sending, setSending] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const [resendLeft, setResendLeft] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, []);
+  const pickRole = (r: Role) => {
+    setRole(r);
+    setTimeout(() => setStep(2), 300);
+  };
 
-  const startResendTimer = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    setResendLeft(RESEND_SECONDS);
-    timerRef.current = setInterval(() => {
-      setResendLeft((s) => {
-        if (s <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          return 0;
-        }
-        return s - 1;
+  const submitForm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fullName.trim()) {
+      setError('Please enter your full name');
+      return;
+    }
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length < 10) {
+      setError('Enter a valid 10-digit phone number');
+      return;
+    }
+    setError('');
+    setBusy(true);
+
+    const email = synthEmail(digits);
+    const password = synthPassword(digits);
+
+    const { error: sErr } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: fullName.trim(), phone: digits, role } },
+    });
+
+    if (sErr && /already/i.test(sErr.message)) {
+      const { error: lErr } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
-    }, 1000);
+      if (lErr) {
+        setBusy(false);
+        setError(lErr.message);
+        return;
+      }
+    } else if (sErr) {
+      setBusy(false);
+      setError(sErr.message);
+      return;
+    }
+
+    window.location.href = role === 'owner' ? '/onboarding' : '/dashboard';
   };
 
   const headings: Record<Step, { h1: string; sub: string }> = {
@@ -51,91 +77,6 @@ export default function SignupPage() {
           ? 'Start finding restaurant jobs today'
           : 'Start hiring great restaurant staff',
     },
-    3: { h1: 'Verify your email', sub: 'Enter the code we sent you' },
-  };
-
-  const pickRole = (r: Role) => {
-    setRole(r);
-    setTimeout(() => setStep(2), 250);
-  };
-
-  const sendCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fullName.trim()) {
-      setError('Please enter your full name');
-      return;
-    }
-    const trimmed = email.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setError('Enter a valid email address');
-      return;
-    }
-    setError('');
-    setSending(true);
-    const { error: otpErr } = await supabase.auth.signInWithOtp({
-      email: trimmed,
-      options: {
-        shouldCreateUser: true,
-        data: { full_name: fullName.trim(), role: role ?? 'worker' },
-      },
-    });
-    setSending(false);
-    if (otpErr) {
-      setError(otpErr.message);
-      return;
-    }
-    setStep(3);
-    setOtp('');
-    startResendTimer();
-  };
-
-  const resendCode = async () => {
-    if (resendLeft > 0 || sending) return;
-    setError('');
-    setOtp('');
-    setSending(true);
-    const { error: otpErr } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        shouldCreateUser: true,
-        data: { full_name: fullName.trim(), role: role ?? 'worker' },
-      },
-    });
-    setSending(false);
-    if (otpErr) {
-      setError(otpErr.message);
-      return;
-    }
-    startResendTimer();
-  };
-
-  const backToForm = () => {
-    setStep(2);
-    setOtp('');
-    setError('');
-    if (timerRef.current) clearInterval(timerRef.current);
-    setResendLeft(0);
-  };
-
-  const verifyCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (otp.length !== 6) {
-      setError('Enter all 6 digits');
-      return;
-    }
-    setError('');
-    setVerifying(true);
-    const { error: vErr } = await supabase.auth.verifyOtp({
-      email: email.trim(),
-      token: otp,
-      type: 'email',
-    });
-    if (vErr) {
-      setVerifying(false);
-      setError(vErr.message);
-      return;
-    }
-    window.location.href = role === 'owner' ? '/onboarding' : '/dashboard';
   };
 
   return (
@@ -209,7 +150,7 @@ export default function SignupPage() {
         )}
 
         {step === 2 && (
-          <form className="signup-step active" onSubmit={sendCode} noValidate>
+          <form className="signup-step active" onSubmit={submitForm} noValidate>
             <div className="field">
               <label htmlFor="fullName">Full name</label>
               <input
@@ -224,89 +165,31 @@ export default function SignupPage() {
             </div>
 
             <div className="field">
-              <label htmlFor="signupEmail">Email address</label>
-              <input
-                type="email"
-                id="signupEmail"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-                required
-              />
+              <label htmlFor="signupPhone">Phone number</label>
+              <div className="phone-input-wrap">
+                <span className="phone-prefix">+91</span>
+                <input
+                  type="tel"
+                  id="signupPhone"
+                  placeholder="98765 43210"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  autoComplete="tel"
+                  maxLength={10}
+                  required
+                />
+              </div>
               {error && <div className="error-text">{error}</div>}
             </div>
 
-            <button
-              type="submit"
-              className="btn-next"
-              style={{ width: '100%' }}
-              disabled={sending}
-            >
-              {sending ? 'Sending…' : 'Send Code'}
+            <button type="submit" className="btn-next" style={{ width: '100%' }} disabled={busy}>
+              {busy ? 'Please wait…' : 'Create Account'}
             </button>
 
             <p className="terms-text">
               By signing up, you agree to our <a href="#">Terms of Service</a> and{' '}
               <a href="#">Privacy Policy</a>
             </p>
-          </form>
-        )}
-
-        {step === 3 && (
-          <form className="signup-step active" onSubmit={verifyCode} noValidate>
-            <button type="button" className="back-link" onClick={backToForm}>
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="19" y1="12" x2="5" y2="12" />
-                <polyline points="12 19 5 12 12 5" />
-              </svg>
-              Back
-            </button>
-
-            <p className="otp-sent-msg">
-              We sent a 6-digit code to
-              <br />
-              <strong>{email}</strong>
-            </p>
-
-            <OTPInput value={otp} onChange={setOtp} />
-
-            {error && (
-              <div
-                className="error-text"
-                style={{ textAlign: 'center', marginBottom: 12 }}
-              >
-                {error}
-              </div>
-            )}
-
-            <div className="resend-row">
-              <button
-                type="button"
-                className="resend-link"
-                disabled={resendLeft > 0 || sending}
-                onClick={resendCode}
-              >
-                Resend code
-              </button>
-              {resendLeft > 0 && <span> in 0:{String(resendLeft).padStart(2, '0')}</span>}
-            </div>
-
-            <button
-              type="submit"
-              className="btn-next"
-              style={{ width: '100%' }}
-              disabled={verifying || otp.length !== 6}
-            >
-              {verifying ? 'Verifying…' : 'Verify & Continue'}
-            </button>
           </form>
         )}
 
@@ -341,6 +224,12 @@ export default function SignupPage() {
         .field label { display: block; font-size: 13px; font-weight: 600; color: var(--charcoal); margin-bottom: 8px; }
         .field input { width: 100%; padding: 14px 16px; border: 1.5px solid var(--sand); border-radius: var(--radius-md); background: white; font-size: 15px; font-family: var(--font-body); color: var(--charcoal); transition: border-color 0.2s; }
         .field input:focus { outline: none; border-color: var(--ember); }
+
+        .phone-input-wrap { display: flex; align-items: stretch; border: 1.5px solid var(--sand); border-radius: var(--radius-md); background: white; overflow: hidden; transition: border-color 0.2s; }
+        .phone-input-wrap:focus-within { border-color: var(--ember); }
+        .phone-prefix { flex-shrink: 0; display: flex; align-items: center; padding: 0 14px; border-right: 1.5px solid var(--sand); font-size: 15px; font-weight: 600; font-family: var(--font-body); color: var(--charcoal); background: var(--cream); }
+        .phone-input-wrap input { flex: 1; min-width: 0; border: none !important; border-radius: 0 !important; background: transparent !important; padding: 14px 16px !important; }
+        .phone-input-wrap input:focus { outline: none !important; box-shadow: none !important; }
 
         .btn-next { margin-top: 8px; padding: 14px 20px; border-radius: 100px; font-size: 15px; font-weight: 700; font-family: var(--font-body); background: var(--ember); color: white; border: none; cursor: pointer; transition: all 0.2s; }
         .btn-next:hover:not(:disabled) { background: #C7421A; transform: translateY(-1px); box-shadow: 0 8px 22px rgba(220,74,26,0.28); }

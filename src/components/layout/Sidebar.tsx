@@ -90,7 +90,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const handleLogout = async () => {
     onNavigate?.();
     await logout();
-    window.location.href = '/login';
+    window.location.href = '/signup';
   };
 
   const { count: savedCount } = useSavedStaff();
@@ -143,22 +143,18 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <span>{item.label}</span>
         </Link>
       ))}
-      <button
-        type="button"
+      <a
+        href="#"
         className="sidebar-nav-item"
-        onClick={handleLogout}
-        style={{
-          background: 'none',
-          border: 'none',
-          width: '100%',
-          textAlign: 'left',
-          cursor: 'pointer',
-          font: 'inherit',
+        onClick={(e) => {
+          e.preventDefault();
+          handleLogout();
         }}
+        style={{ cursor: 'pointer' }}
       >
         {LoginIcon}
         <span>Log Out</span>
-      </button>
+      </a>
 
       <Link
         href="/profile"
