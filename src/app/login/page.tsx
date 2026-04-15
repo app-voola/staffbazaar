@@ -186,6 +186,20 @@ export default function LoginPage() {
                 )}
               </div>
 
+              <div style={{ textAlign: 'right', marginBottom: 12 }}>
+                <Link
+                  href="/forgot-password"
+                  style={{
+                    fontSize: 13,
+                    color: 'var(--ember)',
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                  }}
+                >
+                  Forgot password?
+                </Link>
+              </div>
+
               <button
                 type="submit"
                 className="btn-next"
