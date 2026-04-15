@@ -5,10 +5,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { UnsavedPill } from '@/components/ui/UnsavedPill';
 
+type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+type Hours = Record<DayKey, { open: string; close: string }>;
+
 interface FormState {
   name: string;
   type: string;
   description: string;
+  cuisines: string[];
   address: string;
   city: string;
   pin: string;
@@ -16,13 +20,46 @@ interface FormState {
   email: string;
   website: string;
   coverImage: string;
+  logoImage: string;
   photos: string[];
+  hours: Hours;
 }
+
+const DAYS: { key: DayKey; label: string }[] = [
+  { key: 'mon', label: 'Mon' },
+  { key: 'tue', label: 'Tue' },
+  { key: 'wed', label: 'Wed' },
+  { key: 'thu', label: 'Thu' },
+  { key: 'fri', label: 'Fri' },
+  { key: 'sat', label: 'Sat' },
+  { key: 'sun', label: 'Sun' },
+];
+
+const CUISINE_OPTIONS = [
+  'North Indian',
+  'South Indian',
+  'Continental',
+  'Mughlai',
+  'Tandoor',
+  'Chinese',
+  'Italian',
+  'Street Food',
+  'Biryani',
+  'Seafood',
+  'Pan-Asian',
+  'Desserts & Bakery',
+];
+
+const DEFAULT_HOURS: Hours = DAYS.reduce((acc, d) => {
+  acc[d.key] = { open: '', close: '' };
+  return acc;
+}, {} as Hours);
 
 const EMPTY: FormState = {
   name: '',
   type: 'Casual Dining',
   description: '',
+  cuisines: [],
   address: '',
   city: 'Bangalore',
   pin: '',
@@ -30,7 +67,9 @@ const EMPTY: FormState = {
   email: '',
   website: '',
   coverImage: '',
+  logoImage: '',
   photos: [],
+  hours: DEFAULT_HOURS,
 };
 
 const MAX_PHOTOS = 3;
@@ -51,10 +90,19 @@ export function RestaurantProfileForm() {
     let cancelled = false;
 
     const hydrate = (data: Record<string, unknown> | null) => {
+      const rawHours = (data?.hours as Record<string, { open?: string; close?: string }>) ?? {};
+      const mergedHours: Hours = { ...DEFAULT_HOURS };
+      DAYS.forEach((d) => {
+        const row = rawHours[d.key];
+        if (row) {
+          mergedHours[d.key] = { open: row.open ?? '', close: row.close ?? '' };
+        }
+      });
       const next: FormState = {
         name: (data?.name as string | null) ?? '',
         type: (data?.type as string | null) ?? 'Casual Dining',
         description: (data?.description as string | null) ?? '',
+        cuisines: (data?.cuisines as string[] | null) ?? [],
         address: (data?.address as string | null) ?? '',
         city: (data?.city as string | null) ?? 'Bangalore',
         pin: (data?.pin as string | null) ?? '',
@@ -62,7 +110,9 @@ export function RestaurantProfileForm() {
         email: (data?.email as string | null) ?? '',
         website: (data?.website as string | null) ?? '',
         coverImage: (data?.cover_image as string | null) ?? '',
+        logoImage: (data?.logo_image as string | null) ?? '',
         photos: (data?.photos as string[] | null) ?? [],
+        hours: mergedHours,
       };
       setForm(next);
       setSaved(next);
@@ -101,6 +151,20 @@ export function RestaurantProfileForm() {
   const dirty = JSON.stringify(form) !== JSON.stringify(saved);
   const update = (patch: Partial<FormState>) => setForm((f) => ({ ...f, ...patch }));
 
+  const toggleCuisine = (c: string) =>
+    setForm((f) => ({
+      ...f,
+      cuisines: f.cuisines.includes(c)
+        ? f.cuisines.filter((x) => x !== c)
+        : [...f.cuisines, c],
+    }));
+
+  const setDayTime = (day: DayKey, field: 'open' | 'close', value: string) =>
+    setForm((f) => ({
+      ...f,
+      hours: { ...f.hours, [day]: { ...f.hours[day], [field]: value } },
+    }));
+
   const onSave = async () => {
     if (!user) return;
     const row = {
@@ -108,6 +172,7 @@ export function RestaurantProfileForm() {
       name: form.name,
       type: form.type,
       description: form.description,
+      cuisines: form.cuisines,
       address: form.address,
       city: form.city,
       pin: form.pin,
@@ -115,7 +180,9 @@ export function RestaurantProfileForm() {
       email: form.email,
       website: form.website,
       cover_image: form.coverImage || null,
+      logo_image: form.logoImage || null,
       photos: form.photos,
+      hours: form.hours,
       updated_at: new Date().toISOString(),
     };
     const { error } = await supabase.from('restaurants').upsert(row, { onConflict: 'owner_id' });
@@ -149,34 +216,51 @@ export function RestaurantProfileForm() {
     return data.publicUrl;
   };
 
+  const persistPartial = async (patch: Record<string, unknown>) => {
+    if (!user) return;
+    const { error } = await supabase
+      .from('restaurants')
+      .upsert(
+        { owner_id: user.id, ...patch, updated_at: new Date().toISOString() },
+        { onConflict: 'owner_id' },
+      );
+    if (error) {
+      console.error('[restaurants] persist partial failed', error);
+      setToast(`Save failed: ${error.message}`);
+      setTimeout(() => setToast(''), 3000);
+    }
+  };
+
   const handleCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
     const url = await uploadFile(file);
-    if (!url || !user) return;
-    const { error } = await supabase
-      .from('restaurants')
-      .upsert(
-        { owner_id: user.id, cover_image: url, updated_at: new Date().toISOString() },
-        { onConflict: 'owner_id' },
-      );
-    if (error) {
-      console.error('[restaurants] cover update failed', error);
-      setToast(`Save failed: ${error.message}`);
-      setTimeout(() => setToast(''), 3000);
-      return;
-    }
+    if (!url) return;
+    await persistPartial({ cover_image: url });
     setForm((f) => ({ ...f, coverImage: url }));
     setSaved((s) => ({ ...s, coverImage: url }));
     setToast('Cover updated');
     setTimeout(() => setToast(''), 2000);
   };
 
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const url = await uploadFile(file);
+    if (!url) return;
+    await persistPartial({ logo_image: url });
+    setForm((f) => ({ ...f, logoImage: url }));
+    setSaved((s) => ({ ...s, logoImage: url }));
+    setToast('Logo updated');
+    setTimeout(() => setToast(''), 2000);
+  };
+
   const handlePhotoAdd = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file || !user) return;
+    if (!file) return;
     if (form.photos.length >= MAX_PHOTOS) {
       setToast(`You can add up to ${MAX_PHOTOS} photos`);
       setTimeout(() => setToast(''), 2500);
@@ -185,18 +269,7 @@ export function RestaurantProfileForm() {
     const url = await uploadFile(file);
     if (!url) return;
     const nextPhotos = [...form.photos, url];
-    const { error } = await supabase
-      .from('restaurants')
-      .upsert(
-        { owner_id: user.id, photos: nextPhotos, updated_at: new Date().toISOString() },
-        { onConflict: 'owner_id' },
-      );
-    if (error) {
-      console.error('[restaurants] photos update failed', error);
-      setToast(`Save failed: ${error.message}`);
-      setTimeout(() => setToast(''), 3000);
-      return;
-    }
+    await persistPartial({ photos: nextPhotos });
     setForm((f) => ({ ...f, photos: nextPhotos }));
     setSaved((s) => ({ ...s, photos: nextPhotos }));
     setToast('Photo added');
@@ -206,24 +279,12 @@ export function RestaurantProfileForm() {
   const handlePhotoRemove = async (url: string) => {
     if (!user) return;
     const nextPhotos = form.photos.filter((p) => p !== url);
-    const { error } = await supabase
-      .from('restaurants')
-      .upsert(
-        { owner_id: user.id, photos: nextPhotos, updated_at: new Date().toISOString() },
-        { onConflict: 'owner_id' },
-      );
-    if (error) {
-      console.error('[restaurants] photo remove failed', error);
-      return;
-    }
+    await persistPartial({ photos: nextPhotos });
     setForm((f) => ({ ...f, photos: nextPhotos }));
     setSaved((s) => ({ ...s, photos: nextPhotos }));
-    // Best-effort: delete the underlying object too
     const prefix = `${user.id}/`;
     const key = url.split(prefix)[1];
-    if (key) {
-      await supabase.storage.from(BUCKET).remove([`${prefix}${key}`]);
-    }
+    if (key) await supabase.storage.from(BUCKET).remove([`${prefix}${key}`]);
   };
 
   if (loading) {
@@ -237,29 +298,56 @@ export function RestaurantProfileForm() {
   return (
     <>
       <div className="profile-content">
+        {/* Hero banner */}
         <div
-          className="cover-banner"
+          className="hero-banner"
           style={
             form.coverImage
               ? { backgroundImage: `url(${form.coverImage})` }
               : undefined
           }
         >
-          {!form.coverImage && <div className="cover-placeholder">Add a cover photo</div>}
-          <label className="cover-upload-btn">
+          {!form.coverImage && <div className="hero-placeholder">No cover photo yet</div>}
+          <label className="hero-edit">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-              <circle cx="12" cy="13" r="4" />
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
             </svg>
-            {form.coverImage ? 'Change cover' : 'Upload cover'}
+            Change Cover Photo
             <input type="file" accept="image/*" onChange={handleCoverChange} hidden />
           </label>
         </div>
 
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 32, margin: '24px 0' }}>
-          Restaurant Profile
-        </h1>
+        {/* Logo + name */}
+        <div className="logo-section">
+          <label className="logo-wrap">
+            {form.logoImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={form.logoImage} alt="Logo" />
+            ) : (
+              <span className="logo-placeholder">
+                {form.name ? form.name[0].toUpperCase() : 'R'}
+              </span>
+            )}
+            <span className="logo-camera">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+            </span>
+            <input type="file" accept="image/*" onChange={handleLogoChange} hidden />
+          </label>
+          <div className="logo-info">
+            <h1>{form.name || 'Your Restaurant'}</h1>
+            <p>
+              {form.type}
+              {form.city ? ` · ${form.city}` : ''}
+            </p>
+          </div>
+        </div>
 
+        {/* Business Information */}
         <div className="form-section">
           <h3>Business Information</h3>
           <div className="form-row">
@@ -293,8 +381,58 @@ export function RestaurantProfileForm() {
               onChange={(e) => update({ description: e.target.value })}
             />
           </div>
+
+          <label className="section-label">Cuisine Types</label>
+          <div className="chip-selector">
+            {CUISINE_OPTIONS.map((c) => {
+              const active = form.cuisines.includes(c);
+              return (
+                <button
+                  type="button"
+                  key={c}
+                  className={`chip-option${active ? ' selected' : ''}`}
+                  onClick={() => toggleCuisine(c)}
+                >
+                  {c}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
+        {/* Photos */}
+        <div className="form-section">
+          <h3>Photos</h3>
+          <div className="photos-grid">
+            {form.photos.map((url) => (
+              <div key={url} className="photo-item" style={{ backgroundImage: `url(${url})` }}>
+                <button
+                  type="button"
+                  className="photo-remove"
+                  onClick={() => handlePhotoRemove(url)}
+                  aria-label="Remove"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+            {form.photos.length < MAX_PHOTOS && (
+              <label className="photo-add">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span>Add Photo</span>
+                <input type="file" accept="image/*" onChange={handlePhotoAdd} hidden />
+              </label>
+            )}
+          </div>
+        </div>
+
+        {/* Location */}
         <div className="form-section">
           <h3>Location</h3>
           <div className="field">
@@ -310,7 +448,7 @@ export function RestaurantProfileForm() {
             <div className="field">
               <label>City</label>
               <select value={form.city} onChange={(e) => update({ city: e.target.value })}>
-                {['Mumbai', 'Delhi NCR', 'Bangalore', 'Hyderabad', 'Chennai', 'Kolkata', 'Pune', 'Goa'].map((c) => (
+                {['Mumbai', 'Delhi NCR', 'Bangalore', 'Hyderabad', 'Chennai', 'Kolkata', 'Pune', 'Ahmedabad', 'Jaipur', 'Goa'].map((c) => (
                   <option key={c}>{c}</option>
                 ))}
               </select>
@@ -326,6 +464,29 @@ export function RestaurantProfileForm() {
           </div>
         </div>
 
+        {/* Operating Hours */}
+        <div className="form-section">
+          <h3>Operating Hours</h3>
+          <div className="hours-grid">
+            {DAYS.map((d) => (
+              <div className="hours-row" key={d.key}>
+                <span className="day-label">{d.label}</span>
+                <input
+                  type="time"
+                  value={form.hours[d.key].open}
+                  onChange={(e) => setDayTime(d.key, 'open', e.target.value)}
+                />
+                <input
+                  type="time"
+                  value={form.hours[d.key].close}
+                  onChange={(e) => setDayTime(d.key, 'close', e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Contact */}
         <div className="form-section">
           <h3>Contact Information</h3>
           <div className="form-row">
@@ -348,44 +509,12 @@ export function RestaurantProfileForm() {
             </div>
           </div>
           <div className="field">
-            <label>Website</label>
+            <label>Website (optional)</label>
             <input
               value={form.website}
               placeholder="https://..."
               onChange={(e) => update({ website: e.target.value })}
             />
-          </div>
-        </div>
-
-        <div className="form-section">
-          <h3>Photos</h3>
-          <div className="photos-grid">
-            {form.photos.map((url) => (
-              <div key={url} className="photo-tile" style={{ backgroundImage: `url(${url})` }}>
-                <button
-                  type="button"
-                  className="photo-remove"
-                  onClick={() => handlePhotoRemove(url)}
-                  title="Remove"
-                  aria-label="Remove photo"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-            {form.photos.length < MAX_PHOTOS && (
-              <label className="photo-add">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                <span>Add Photo</span>
-                <input type="file" accept="image/*" onChange={handlePhotoAdd} hidden />
-              </label>
-            )}
           </div>
         </div>
       </div>
@@ -402,30 +531,66 @@ export function RestaurantProfileForm() {
       )}
 
       <style>{`
-        .profile-content { max-width: 760px; padding-bottom: 80px; }
+        .profile-content { max-width: 900px; padding-bottom: 80px; }
 
-        .cover-banner { position: relative; height: 220px; border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--cream), var(--sand)); background-size: cover; background-position: center; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-        .cover-placeholder { color: var(--charcoal-light); font-size: 14px; font-weight: 600; letter-spacing: 0.3px; }
-        .cover-upload-btn { position: absolute; right: 16px; bottom: 16px; display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 100px; background: rgba(0,0,0,0.65); color: white; font-size: 13px; font-weight: 700; cursor: pointer; font-family: var(--font-body); transition: background 0.2s; }
-        .cover-upload-btn:hover { background: rgba(0,0,0,0.85); }
-        .cover-upload-btn svg { width: 16px; height: 16px; }
+        .hero-banner { position: relative; height: 260px; border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--cream), var(--sand)); background-size: cover; background-position: center; margin-bottom: 0; overflow: hidden; }
+        .hero-placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--charcoal-light); font-size: 14px; font-weight: 600; }
+        .hero-edit { position: absolute; right: 16px; bottom: 16px; display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 100px; background: white; color: var(--charcoal); font-size: 13px; font-weight: 700; cursor: pointer; font-family: var(--font-body); box-shadow: 0 6px 18px rgba(0,0,0,0.18); transition: all 0.2s; }
+        .hero-edit:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(0,0,0,0.22); }
+        .hero-edit svg { width: 16px; height: 16px; }
 
-        .photos-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-        .photo-tile { position: relative; aspect-ratio: 1 / 1; border-radius: var(--radius-md); background: var(--cream); background-size: cover; background-position: center; overflow: hidden; border: 1.5px solid var(--sand); }
-        .photo-remove { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 50%; border: none; background: rgba(0,0,0,0.65); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
-        .photo-remove:hover { background: rgba(220,74,26,0.95); }
-        .photo-remove svg { width: 13px; height: 13px; }
-        .photo-add { aspect-ratio: 1 / 1; border: 2px dashed var(--sand); border-radius: var(--radius-md); background: white; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; cursor: pointer; color: var(--charcoal-light); font-family: var(--font-body); font-size: 12px; font-weight: 600; transition: all 0.2s; }
-        .photo-add:hover { border-color: var(--ember); color: var(--ember); background: var(--ember-glow); }
-        .photo-add svg { width: 20px; height: 20px; }
-        @media (max-width: 640px) { .photos-grid { grid-template-columns: repeat(2, 1fr); } }
+        .logo-section { display: flex; align-items: flex-end; gap: 20px; margin: -50px 0 28px; padding-left: 20px; position: relative; z-index: 5; }
+        .logo-wrap { position: relative; width: 112px; height: 112px; border-radius: 50%; background: white; box-shadow: 0 0 0 4px white, var(--shadow-md); overflow: visible; cursor: pointer; flex-shrink: 0; }
+        .logo-wrap img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+        .logo-placeholder { width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: linear-gradient(145deg, var(--ember), var(--gold)); color: white; font-family: var(--font-display); font-size: 40px; }
+        .logo-camera { position: absolute; bottom: 2px; right: 2px; width: 30px; height: 30px; border-radius: 50%; background: var(--ember); border: 2px solid white; display: flex; align-items: center; justify-content: center; }
+        .logo-camera svg { width: 14px; height: 14px; color: white; }
+        .logo-info h1 { font-family: var(--font-display); font-size: 30px; line-height: 1.1; margin-bottom: 2px; }
+        .logo-info p { font-size: 14px; color: var(--charcoal-light); }
 
         .form-section { margin-bottom: 36px; }
         .form-section h3 { font-family: var(--font-display); font-size: 20px; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--sand); }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        @media (max-width: 640px) { .form-row { grid-template-columns: 1fr; } }
+        .field { margin-bottom: 14px; }
+        .field label { display: block; font-size: 13px; font-weight: 600; color: var(--charcoal); margin-bottom: 8px; }
+        .field input, .field select, .field textarea { width: 100%; padding: 12px 14px; border: 1.5px solid var(--sand); border-radius: var(--radius-md); background: white; font-size: 14px; font-family: var(--font-body); color: var(--charcoal); transition: border-color 0.2s; box-sizing: border-box; }
+        .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--ember); }
+
+        .section-label { display: block; font-size: 13px; font-weight: 600; color: var(--charcoal-mid); margin: 8px 0 10px; }
+        .chip-selector { display: flex; flex-wrap: wrap; gap: 8px; }
+        .chip-option { padding: 8px 16px; border-radius: 100px; background: white; border: 1.5px solid var(--sand); color: var(--charcoal-light); font-size: 13px; font-weight: 600; font-family: var(--font-body); cursor: pointer; transition: all 0.2s; }
+        .chip-option:hover { border-color: var(--ember); color: var(--ember); }
+        .chip-option.selected { background: var(--ember-glow); border-color: var(--ember); color: var(--ember); }
+
+        .photos-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+        .photo-item { aspect-ratio: 1 / 1; border-radius: var(--radius-md); background: var(--cream); background-size: cover; background-position: center; border: 1.5px solid var(--sand); position: relative; overflow: hidden; }
+        .photo-remove { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 50%; border: none; background: rgba(0,0,0,0.6); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s, background 0.2s; }
+        .photo-item:hover .photo-remove { opacity: 1; }
+        .photo-remove:hover { background: rgba(220,74,26,0.95); }
+        .photo-remove svg { width: 13px; height: 13px; }
+        .photo-add { aspect-ratio: 1 / 1; border: 2px dashed var(--sand); border-radius: var(--radius-md); background: white; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; cursor: pointer; color: var(--stone); font-family: var(--font-body); font-size: 12px; font-weight: 600; transition: all 0.2s; }
+        .photo-add:hover { border-color: var(--ember); color: var(--ember); background: var(--ember-glow); }
+        .photo-add svg { width: 22px; height: 22px; }
+
+        .hours-grid { display: flex; flex-direction: column; gap: 8px; }
+        .hours-row { display: grid; grid-template-columns: 80px 1fr 1fr; gap: 10px; align-items: center; }
+        .hours-row .day-label { font-size: 14px; font-weight: 600; color: var(--charcoal); }
+        .hours-row input { padding: 10px 12px; border: 1.5px solid var(--sand); border-radius: var(--radius-sm); font-size: 14px; font-family: var(--font-body); color: var(--charcoal); background: white; }
+        .hours-row input:focus { outline: none; border-color: var(--ember); }
+
         .sb-toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: var(--charcoal); color: white; padding: 14px 22px; border-radius: 100px; font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 10px; box-shadow: var(--shadow-lg); z-index: 400; }
         .sb-toast svg { width: 18px; height: 18px; color: var(--green); }
+
+        @media (max-width: 768px) { .photos-grid { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 640px) {
+          .form-row { grid-template-columns: 1fr; }
+          .photos-grid { grid-template-columns: repeat(2, 1fr); }
+          .hours-row { grid-template-columns: 60px 1fr 1fr; }
+          .logo-section { margin-top: -40px; }
+          .logo-wrap { width: 92px; height: 92px; }
+          .logo-info h1 { font-size: 24px; }
+          .hero-banner { height: 180px; }
+        }
       `}</style>
     </>
   );
