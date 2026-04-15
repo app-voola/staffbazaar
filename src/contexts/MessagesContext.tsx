@@ -13,12 +13,21 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { type MockConversation, type MockMessage } from '@/services/mock/conversations';
 
+interface StartChatInput {
+  id: string;
+  name: string;
+  role?: string;
+  avatar?: string;
+  initials?: string;
+}
+
 interface MessagesContextValue {
   conversations: MockConversation[];
   loading: boolean;
   unreadCount: number;
   send: (convId: string, text: string) => Promise<void>;
   markRead: (convId: string) => Promise<void>;
+  startChat: (input: StartChatInput) => Promise<string>;
 }
 
 const MessagesContext = createContext<MessagesContextValue | undefined>(undefined);
@@ -217,11 +226,57 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
     if (error) console.error('[conversations] markRead failed', error);
   }, []);
 
+  const startChat = useCallback<MessagesContextValue['startChat']>(
+    async (input) => {
+      if (!user) throw new Error('Not signed in');
+
+      const existing = conversations.find((c) => c.id === input.id);
+      if (existing) return existing.id;
+
+      const newConv: MockConversation = {
+        id: input.id,
+        name: input.name,
+        role: input.role ?? '',
+        avatar: input.avatar,
+        initials: input.initials ?? input.name.slice(0, 2).toUpperCase(),
+        type: 'active',
+        lastMessage: '',
+        time: 'Just now',
+        unread: 0,
+        messages: [],
+      };
+
+      setConversations((prev) => [newConv, ...prev]);
+
+      const { error } = await supabase.from('conversations').insert({
+        id: newConv.id,
+        owner_id: user.id,
+        name: newConv.name,
+        role: newConv.role,
+        avatar: newConv.avatar ?? null,
+        initials: newConv.initials,
+        type: 'active',
+        last_message: '',
+        time: 'Just now',
+        unread: 0,
+      });
+
+      if (error) {
+        console.error('[conversations] startChat failed', error);
+        setConversations((prev) => prev.filter((c) => c.id !== newConv.id));
+        throw error;
+      }
+
+      return newConv.id;
+    },
+    [conversations, user],
+  );
+
   const unreadCount = conversations.reduce((s, c) => s + c.unread, 0);
 
   const value = useMemo(
-    () => ({ conversations, loading, unreadCount, send, markRead }),
-    [conversations, loading, unreadCount, send, markRead],
+    () => ({ conversations, loading, unreadCount, send, markRead, startChat }),
+    [conversations, loading, unreadCount, send, markRead, startChat],
   );
 
   return <MessagesContext.Provider value={value}>{children}</MessagesContext.Provider>;
