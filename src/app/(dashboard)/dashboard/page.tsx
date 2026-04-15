@@ -2,6 +2,8 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useJobs } from '@/contexts/JobsContext';
+import { useApplicants } from '@/contexts/ApplicantsContext';
+import { useMessages } from '@/contexts/MessagesContext';
 import Link from 'next/link';
 
 function greeting(date = new Date()) {
@@ -13,8 +15,12 @@ function greeting(date = new Date()) {
 
 export default function OwnerDashboardPage() {
   const { user, restaurant } = useAuth();
-  const { activeCount, postsUsed, postsLimit, jobs } = useJobs();
-  const newApplicants = jobs.reduce((s, j) => s + j.newToday, 0);
+  const { activeCount, postsUsed, postsLimit } = useJobs();
+  const { applicants } = useApplicants();
+  const { unreadCount } = useMessages();
+
+  const newApplicants = applicants.filter((a) => a.stage === 'applied').length;
+  const hiredCount = applicants.filter((a) => a.stage === 'hired').length;
   const firstName = user?.full_name?.split(' ')[0] ?? 'there';
   const quotaPct = Math.min(100, Math.round((postsUsed / postsLimit) * 100));
   const dateStr = new Date().toLocaleDateString('en-IN', {
@@ -72,7 +78,6 @@ export default function OwnerDashboardPage() {
           </div>
           <div className="stat-number">{newApplicants}</div>
           <div className="stat-label">New Applicants</div>
-          <div className="stat-change up">today</div>
         </div>
         <div className="stat-card">
           <div className="stat-icon" style={{ background: 'var(--gold-light)', color: 'var(--gold)' }}>
@@ -80,7 +85,7 @@ export default function OwnerDashboardPage() {
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
             </svg>
           </div>
-          <div className="stat-number">28</div>
+          <div className="stat-number">{hiredCount}</div>
           <div className="stat-label">Total Hires All Time</div>
         </div>
         <Link
@@ -111,57 +116,65 @@ export default function OwnerDashboardPage() {
         </Link>
       </div>
 
-      <div className="section-block">
-        <h2>Needs Your Attention</h2>
-        <div className="attention-list">
-          <div className="attention-card">
-            <div className="attention-icon blue">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="8.5" cy="7" r="4" />
-                <line x1="20" y1="8" x2="20" y2="14" />
-                <line x1="23" y1="11" x2="17" y2="11" />
-              </svg>
-            </div>
-            <div className="attention-body">
-              <div className="attention-title">
-                5 new applicants<span className="attention-count">5</span>
+      {(newApplicants > 0 || unreadCount > 0) && (
+        <div className="section-block">
+          <h2>Needs Your Attention</h2>
+          <div className="attention-list">
+            {newApplicants > 0 && (
+              <div className="attention-card">
+                <div className="attention-icon blue">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="8.5" cy="7" r="4" />
+                    <line x1="20" y1="8" x2="20" y2="14" />
+                    <line x1="23" y1="11" x2="17" y2="11" />
+                  </svg>
+                </div>
+                <div className="attention-body">
+                  <div className="attention-title">
+                    {newApplicants} new applicant{newApplicants === 1 ? '' : 's'}
+                    <span className="attention-count">{newApplicants}</span>
+                  </div>
+                  <div className="attention-sub">
+                    Review and shortlist before they take another job
+                  </div>
+                </div>
+                <Link href="/my-jobs" className="attention-btn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                  View
+                </Link>
               </div>
-              <div className="attention-sub">
-                Review and shortlist before they take another job
-              </div>
-            </div>
-            <Link href="/my-jobs" className="attention-btn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-              View
-            </Link>
-          </div>
+            )}
 
-          <div className="attention-card">
-            <div className="attention-icon ember">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-            </div>
-            <div className="attention-body">
-              <div className="attention-title">
-                3 unread messages<span className="attention-count">3</span>
+            {unreadCount > 0 && (
+              <div className="attention-card">
+                <div className="attention-icon ember">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </svg>
+                </div>
+                <div className="attention-body">
+                  <div className="attention-title">
+                    {unreadCount} unread message{unreadCount === 1 ? '' : 's'}
+                    <span className="attention-count">{unreadCount}</span>
+                  </div>
+                  <div className="attention-sub">Reply to keep candidates engaged</div>
+                </div>
+                <Link href="/messages" className="attention-btn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="9 17 4 12 9 7" />
+                    <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+                  </svg>
+                  Reply
+                </Link>
               </div>
-              <div className="attention-sub">From Abdul Malik and 2 others</div>
-            </div>
-            <Link href="/messages" className="attention-btn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="9 17 4 12 9 7" />
-                <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
-              </svg>
-              Reply
-            </Link>
+            )}
           </div>
         </div>
-      </div>
+      )}
 
       <style>{`
         .welcome-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }
