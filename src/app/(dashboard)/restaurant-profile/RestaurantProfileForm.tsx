@@ -184,7 +184,7 @@ export function RestaurantProfileForm() {
               <label>Phone</label>
               <input
                 value={form.phone}
-                placeholder="+91 98765 43210"
+                placeholder="+91"
                 onChange={(e) => update({ phone: e.target.value })}
               />
             </div>
