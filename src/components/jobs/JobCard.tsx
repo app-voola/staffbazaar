@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import type { MockJob } from '@/services/mock/jobs';
 import { useJobs } from '@/contexts/JobsContext';
+import { useApplicants } from '@/contexts/ApplicantsContext';
 
 const PauseIcon = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -30,8 +31,13 @@ export function JobCard({
   onRequestPause: (id: string) => void;
 }) {
   const { updateJob } = useJobs();
+  const { byJob } = useApplicants();
   const isActive = job.status === 'active';
   const isPaused = job.status === 'paused';
+
+  const jobApplicants = byJob(job.id);
+  const applicantCount = jobApplicants.length;
+  const newTodayCount = jobApplicants.filter((a) => a.stage === 'applied').length;
 
   return (
     <div className={`job-card${job.status === 'closed' ? ' dimmed' : ''}`}>
@@ -55,8 +61,8 @@ export function JobCard({
             </svg>
             Applicants
           </div>
-          <div className="hero-stat-value">{job.applicants}</div>
-          {job.newToday > 0 && <div className="hero-stat-sub">{job.newToday} new today</div>}
+          <div className="hero-stat-value">{applicantCount}</div>
+          {newTodayCount > 0 && <div className="hero-stat-sub">{newTodayCount} new</div>}
         </div>
         <div className="hero-stat">
           <div className="hero-stat-label">
