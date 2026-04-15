@@ -1,7 +1,9 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import type { MockWorker } from '@/services/mock/workers';
 import type { WorkerProfileDetail } from '@/services/mock/workerProfiles';
+import { useMessages } from '@/contexts/MessagesContext';
 
 export function ProfileHero({
   worker,
@@ -12,6 +14,24 @@ export function ProfileHero({
   profile: WorkerProfileDetail;
   onAddToJob: () => void;
 }) {
+  const router = useRouter();
+  const { startChat } = useMessages();
+
+  const handleMessage = async () => {
+    try {
+      await startChat({
+        id: `worker-${worker.id}`,
+        name: worker.name,
+        role: worker.roleLabel,
+        avatar: worker.avatar,
+        initials: worker.initials,
+      });
+      router.push('/messages');
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
     <div className="profile-hero">
       <div className="profile-hero-avatar-wrap">
@@ -47,6 +67,9 @@ export function ProfileHero({
         <button type="button" className="btn-primary-action btn-add" onClick={onAddToJob}>
           🔖 Add to Job
         </button>
+        <button type="button" className="btn-primary-action btn-msg" onClick={handleMessage}>
+          💬 Message
+        </button>
       </div>
 
       <style>{`
@@ -68,6 +91,8 @@ export function ProfileHero({
         .btn-call:hover { background: var(--green); color: white; }
         .btn-add { background: var(--ember); color: white; box-shadow: 0 4px 16px rgba(220,74,26,0.22); }
         .btn-add:hover { background: #C7421A; transform: translateY(-1px); }
+        .btn-msg { background: white; color: var(--charcoal); border: 1.5px solid var(--sand); }
+        .btn-msg:hover { border-color: var(--ember); color: var(--ember); }
         @media (max-width: 640px) { .profile-hero-avatar-wrap, .profile-hero-avatar { width: 120px; height: 120px; } .profile-hero-avatar { font-size: 44px; } .profile-hero-main h1 { font-size: 26px; } }
       `}</style>
     </div>
