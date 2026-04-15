@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { MockApplicant } from '@/services/mock/applicants';
+import { useMessages } from '@/contexts/MessagesContext';
 
 const STAGES_ORDER = ['applied', 'shortlisted', 'called', 'hired'] as const;
 
@@ -20,6 +22,24 @@ export function KanbanCard({
   const isCalled = applicant.stage === 'called';
   const isHired = applicant.stage === 'hired';
   const stars = Array.from({ length: 5 }, (_, i) => i < applicant.rating);
+  const router = useRouter();
+  const { startChat } = useMessages();
+
+  const handleMessage = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await startChat({
+        id: `applicant-${applicant.id}`,
+        name: applicant.name,
+        role: applicant.role,
+        avatar: applicant.avatar,
+        initials: applicant.initials,
+      });
+      router.push('/messages');
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   return (
     <div
@@ -84,6 +104,16 @@ export function KanbanCard({
             <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
           </svg>
         </a>
+        <button
+          type="button"
+          className="btn-message"
+          title="Message"
+          onClick={handleMessage}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+        </button>
         {!isHired && (
           <button
             type="button"
@@ -119,6 +149,8 @@ export function KanbanCard({
         .kanban-card-actions button, .kanban-card-actions a { width: 34px; height: 34px; border-radius: 50%; border: none; background: var(--cream); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--charcoal); transition: all 0.2s; text-decoration: none; }
         .kanban-card-actions a.btn-call { background: var(--green-light); color: var(--green-dark); }
         .kanban-card-actions a.btn-call:hover { background: var(--green); color: white; }
+        .kanban-card-actions button.btn-message { background: var(--ember-glow); color: var(--ember); }
+        .kanban-card-actions button.btn-message:hover { background: var(--ember); color: white; }
         .kanban-card-actions button.btn-move-next { background: var(--ember-glow); color: var(--ember); }
         .kanban-card-actions button.btn-move-next:hover { background: var(--ember); color: white; }
         .kanban-card-actions svg { width: 15px; height: 15px; }

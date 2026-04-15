@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { useJobs } from '@/contexts/JobsContext';
+import { useApplicants } from '@/contexts/ApplicantsContext';
 import type { MockWorker } from '@/services/mock/workers';
 
 export function ShortlistModal({
@@ -13,9 +15,42 @@ export function ShortlistModal({
   onPicked: (jobTitle: string) => void;
 }) {
   const { jobs } = useJobs();
+  const { addApplicant, applicants } = useApplicants();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState('');
+
   if (!worker) return null;
 
   const activeJobs = jobs.filter((j) => j.status === 'active');
+
+  const handlePick = async (jobId: string, jobTitle: string) => {
+    const alreadyThere = applicants.some((a) => a.jobId === jobId && a.phone === worker.phone);
+    if (alreadyThere) {
+      onPicked(jobTitle);
+      return;
+    }
+    setBusy(jobId);
+    setError('');
+    try {
+      await addApplicant({
+        jobId,
+        name: worker.name,
+        role: worker.roleLabel,
+        experience: worker.experience,
+        salary: worker.salary,
+        rating: worker.rating,
+        phone: worker.phone,
+        avatar: worker.avatar,
+        initials: worker.initials,
+        stage: 'shortlisted',
+      });
+      setBusy(null);
+      onPicked(jobTitle);
+    } catch (err) {
+      setBusy(null);
+      setError((err as Error).message || 'Failed to shortlist');
+    }
+  };
 
   return (
     <div
@@ -35,17 +70,31 @@ export function ShortlistModal({
               No active jobs. Post one first.
             </p>
           ) : (
-            activeJobs.map((j) => (
-              <button key={j.id} type="button" className="job-pick" onClick={() => onPicked(j.title)}>
-                <div>
-                  <div className="job-pick-name">{j.title}</div>
-                  <div className="job-pick-meta">Spice Garden · {j.applicants} applicants</div>
-                </div>
-                <span className="job-pick-arrow">→</span>
-              </button>
-            ))
+            activeJobs.map((j) => {
+              const loadingThis = busy === j.id;
+              return (
+                <button
+                  key={j.id}
+                  type="button"
+                  className="job-pick"
+                  disabled={busy !== null}
+                  onClick={() => handlePick(j.id, j.title)}
+                >
+                  <div>
+                    <div className="job-pick-name">{j.title}</div>
+                    <div className="job-pick-meta">{j.applicants} applicants</div>
+                  </div>
+                  <span className="job-pick-arrow">{loadingThis ? '…' : '→'}</span>
+                </button>
+              );
+            })
           )}
         </div>
+        {error && (
+          <div style={{ color: '#DC2626', fontSize: 12, marginBottom: 12, textAlign: 'center' }}>
+            {error}
+          </div>
+        )}
         <button type="button" className="modal-cancel" onClick={onClose}>
           Cancel
         </button>

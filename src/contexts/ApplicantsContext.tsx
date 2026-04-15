@@ -19,6 +19,9 @@ interface ApplicantsContextValue {
   byJob: (jobId: string) => MockApplicant[];
   byJobAndStage: (jobId: string, stage: ApplicantStage) => MockApplicant[];
   moveTo: (id: string, stage: ApplicantStage) => Promise<void>;
+  addApplicant: (
+    applicant: Omit<MockApplicant, 'id'> & { id?: string },
+  ) => Promise<MockApplicant>;
 }
 
 const ApplicantsContext = createContext<ApplicantsContextValue | undefined>(undefined);
@@ -132,9 +135,46 @@ export function ApplicantsProvider({ children }: { children: ReactNode }) {
     }
   }, [applicants]);
 
+  const addApplicant = useCallback<ApplicantsContextValue['addApplicant']>(
+    async (applicant) => {
+      if (!user) throw new Error('Not signed in');
+      const created: MockApplicant = {
+        ...applicant,
+        id: applicant.id ?? `app-${Date.now()}`,
+      };
+
+      setApplicants((prev) =>
+        prev.some((a) => a.id === created.id) ? prev : [...prev, created],
+      );
+
+      const { error } = await supabase.from('applicants').insert({
+        id: created.id,
+        job_id: created.jobId,
+        name: created.name,
+        role: created.role,
+        experience: created.experience,
+        salary: created.salary,
+        rating: created.rating,
+        phone: created.phone,
+        avatar: created.avatar ?? null,
+        initials: created.initials,
+        stage: created.stage,
+      });
+
+      if (error) {
+        console.error('[applicants] insert failed', error);
+        setApplicants((prev) => prev.filter((a) => a.id !== created.id));
+        throw error;
+      }
+
+      return created;
+    },
+    [user],
+  );
+
   const value = useMemo(
-    () => ({ applicants, loading, byJob, byJobAndStage, moveTo }),
-    [applicants, loading, byJob, byJobAndStage, moveTo],
+    () => ({ applicants, loading, byJob, byJobAndStage, moveTo, addApplicant }),
+    [applicants, loading, byJob, byJobAndStage, moveTo, addApplicant],
   );
 
   return <ApplicantsContext.Provider value={value}>{children}</ApplicantsContext.Provider>;
