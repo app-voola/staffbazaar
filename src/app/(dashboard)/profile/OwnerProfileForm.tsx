@@ -9,14 +9,16 @@ import { UnsavedPill } from '@/components/ui/UnsavedPill';
 interface FormState {
   fullName: string;
   email: string;
+  phone: string;
   notifyApplicants: boolean;
   notifyWhatsapp: boolean;
   language: 'English' | 'Hindi';
 }
 
-const DEFAULTS: FormState = {
+const EMPTY: FormState = {
   fullName: '',
   email: '',
+  phone: '',
   notifyApplicants: true,
   notifyWhatsapp: true,
   language: 'English',
@@ -24,43 +26,63 @@ const DEFAULTS: FormState = {
 
 export function OwnerProfileForm() {
   const { user } = useAuth();
-  const [form, setForm] = useState<FormState>(DEFAULTS);
-  const [saved, setSaved] = useState<FormState>(DEFAULTS);
+  const [form, setForm] = useState<FormState>(EMPTY);
+  const [saved, setSaved] = useState<FormState>(EMPTY);
+  const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
 
-  // Hydrate from the logged-in user whenever they change.
   useEffect(() => {
-    if (!user) return;
-    const next: FormState = {
-      ...DEFAULTS,
-      fullName: user.full_name ?? '',
-      email: user.full_name?.includes('@') ? user.full_name : '',
-    };
-    setForm(next);
-    setSaved(next);
-  }, [user?.id]);
-
-  // Pull email straight from the Supabase session, since AuthContext stuffs
-  // it into full_name only when no other name is available.
-  useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
     (async () => {
-      const { data } = await supabase.auth.getUser();
-      const email = data.user?.email ?? '';
-      if (!email) return;
-      setForm((f) => (f.email ? f : { ...f, email }));
-      setSaved((s) => (s.email ? s : { ...s, email }));
+      const [{ data: profile, error }, { data: authUser }] = await Promise.all([
+        supabase.from('profiles').select('*').eq('owner_id', user.id).maybeSingle(),
+        supabase.auth.getUser(),
+      ]);
+      if (cancelled) return;
+      if (error) console.error('[profiles] load failed', error);
+
+      const authEmail = authUser.user?.email ?? '';
+      const metaName = (authUser.user?.user_metadata?.full_name as string | undefined) ?? '';
+
+      const next: FormState = {
+        fullName: profile?.full_name ?? metaName,
+        email: profile?.email ?? authEmail,
+        phone: profile?.phone ?? '',
+        notifyApplicants: profile?.notify_applicants ?? true,
+        notifyWhatsapp: profile?.notify_whatsapp ?? true,
+        language: (profile?.language as FormState['language']) ?? 'English',
+      };
+      setForm(next);
+      setSaved(next);
+      setLoading(false);
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [user?.id]);
 
   const dirty = JSON.stringify(form) !== JSON.stringify(saved);
   const update = (patch: Partial<FormState>) => setForm((f) => ({ ...f, ...patch }));
 
-  const handleSave = async () => {
-    const { error } = await supabase.auth.updateUser({
-      email: form.email || undefined,
-      data: { full_name: form.fullName },
-    });
+  const onSave = async () => {
+    if (!user) return;
+    const row = {
+      owner_id: user.id,
+      full_name: form.fullName,
+      email: form.email,
+      phone: form.phone,
+      notify_applicants: form.notifyApplicants,
+      notify_whatsapp: form.notifyWhatsapp,
+      language: form.language,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from('profiles').upsert(row, { onConflict: 'owner_id' });
     if (error) {
+      console.error('[profiles] save failed', error);
       setToast(`Save failed: ${error.message}`);
       setTimeout(() => setToast(''), 3000);
       return;
@@ -69,6 +91,14 @@ export function OwnerProfileForm() {
     setToast('Profile saved');
     setTimeout(() => setToast(''), 2000);
   };
+
+  if (loading) {
+    return (
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginTop: 16 }}>
+        Loading…
+      </h1>
+    );
+  }
 
   return (
     <>
@@ -81,21 +111,27 @@ export function OwnerProfileForm() {
           <h3>Basic Information</h3>
           <div className="field">
             <label>Full Name</label>
-            <input value={form.fullName} onChange={(e) => update({ fullName: e.target.value })} />
+            <input
+              value={form.fullName}
+              placeholder="Your full name"
+              onChange={(e) => update({ fullName: e.target.value })}
+            />
           </div>
           <div className="form-row">
             <div className="field">
               <label>Phone</label>
-              <div className="readonly-field">
-                <span>{user?.phone ?? '+91 98765 43210'}</span>
-                <span className="verified-chip">✓ Verified</span>
-              </div>
+              <input
+                value={form.phone}
+                placeholder="+91 98765 43210"
+                onChange={(e) => update({ phone: e.target.value })}
+              />
             </div>
             <div className="field">
               <label>Email</label>
               <input
                 type="email"
                 value={form.email}
+                placeholder="you@example.com"
                 onChange={(e) => update({ email: e.target.value })}
               />
             </div>
@@ -154,10 +190,9 @@ export function OwnerProfileForm() {
             </Link>
           </div>
         </div>
-
       </div>
 
-      <UnsavedPill show={dirty} onDiscard={() => setForm(saved)} onSave={handleSave} />
+      <UnsavedPill show={dirty} onDiscard={() => setForm(saved)} onSave={onSave} />
 
       {toast && (
         <div className="sb-toast show">
@@ -173,8 +208,6 @@ export function OwnerProfileForm() {
         .form-section { margin-bottom: 36px; }
         .form-section h3 { font-family: var(--font-display); font-size: 20px; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--sand); }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        .readonly-field { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border: 1.5px solid var(--sand); border-radius: var(--radius-md); background: var(--cream); font-size: 15px; }
-        .verified-chip { padding: 3px 10px; border-radius: 100px; background: var(--green-light); color: var(--green-dark); font-size: 11px; font-weight: 700; }
         .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--sand); }
         .toggle-row:last-child { border-bottom: none; }
         .toggle-label { font-size: 14px; font-weight: 600; color: var(--charcoal); }

@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { UnsavedPill } from '@/components/ui/UnsavedPill';
 
 interface FormState {
@@ -15,34 +17,92 @@ interface FormState {
   website: string;
 }
 
-const INITIAL: FormState = {
-  name: 'Spice Garden',
+const EMPTY: FormState = {
+  name: '',
   type: 'Casual Dining',
-  description:
-    'Spice Garden is a beloved casual dining restaurant in Koramangala, Bangalore, known for authentic North Indian and Continental cuisine.',
-  address: 'No. 42, 1st Cross Road, 5th Block, Koramangala',
+  description: '',
+  address: '',
   city: 'Bangalore',
-  pin: '560034',
-  phone: '+91 98765 43210',
-  email: 'info@spicegarden.in',
-  website: 'https://www.spicegarden.in',
+  pin: '',
+  phone: '',
+  email: '',
+  website: '',
 };
 
 export function RestaurantProfileForm() {
-  const [form, setForm] = useState<FormState>(INITIAL);
-  const [saved, setSaved] = useState<FormState>(INITIAL);
+  const { user } = useAuth();
+  const [form, setForm] = useState<FormState>(EMPTY);
+  const [saved, setSaved] = useState<FormState>(EMPTY);
+  const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
+
+  useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('restaurants')
+        .select('*')
+        .eq('owner_id', user.id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        console.error('[restaurants] load failed', error);
+      }
+      const next: FormState = {
+        name: data?.name ?? '',
+        type: data?.type ?? 'Casual Dining',
+        description: data?.description ?? '',
+        address: data?.address ?? '',
+        city: data?.city ?? 'Bangalore',
+        pin: data?.pin ?? '',
+        phone: data?.phone ?? '',
+        email: data?.email ?? '',
+        website: data?.website ?? '',
+      };
+      setForm(next);
+      setSaved(next);
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   const dirty = JSON.stringify(form) !== JSON.stringify(saved);
   const update = (patch: Partial<FormState>) => setForm((f) => ({ ...f, ...patch }));
 
-  const onSave = () => {
+  const onSave = async () => {
+    if (!user) return;
+    const row = {
+      owner_id: user.id,
+      ...form,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from('restaurants').upsert(row, { onConflict: 'owner_id' });
+    if (error) {
+      console.error('[restaurants] save failed', error);
+      setToast(`Save failed: ${error.message}`);
+      setTimeout(() => setToast(''), 3000);
+      return;
+    }
     setSaved(form);
     setToast('Profile updated');
     setTimeout(() => setToast(''), 2000);
   };
 
   const onDiscard = () => setForm(saved);
+
+  if (loading) {
+    return (
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginTop: 16 }}>
+        Loading…
+      </h1>
+    );
+  }
 
   return (
     <>
@@ -56,7 +116,11 @@ export function RestaurantProfileForm() {
           <div className="form-row">
             <div className="field">
               <label>Restaurant Name</label>
-              <input value={form.name} onChange={(e) => update({ name: e.target.value })} />
+              <input
+                value={form.name}
+                placeholder="Your restaurant name"
+                onChange={(e) => update({ name: e.target.value })}
+              />
             </div>
             <div className="field">
               <label>Type</label>
@@ -75,6 +139,7 @@ export function RestaurantProfileForm() {
             <label>Description</label>
             <textarea
               rows={4}
+              placeholder="Tell candidates about your restaurant"
               value={form.description}
               onChange={(e) => update({ description: e.target.value })}
             />
@@ -87,6 +152,7 @@ export function RestaurantProfileForm() {
             <label>Full Address</label>
             <textarea
               rows={2}
+              placeholder="Shop number, street, locality"
               value={form.address}
               onChange={(e) => update({ address: e.target.value })}
             />
@@ -104,6 +170,7 @@ export function RestaurantProfileForm() {
               <label>PIN Code</label>
               <input
                 value={form.pin}
+                placeholder="560001"
                 onChange={(e) => update({ pin: e.target.value.replace(/\D/g, '').slice(0, 6) })}
               />
             </div>
@@ -115,20 +182,29 @@ export function RestaurantProfileForm() {
           <div className="form-row">
             <div className="field">
               <label>Phone</label>
-              <input value={form.phone} onChange={(e) => update({ phone: e.target.value })} />
+              <input
+                value={form.phone}
+                placeholder="+91 98765 43210"
+                onChange={(e) => update({ phone: e.target.value })}
+              />
             </div>
             <div className="field">
               <label>Email</label>
               <input
                 type="email"
                 value={form.email}
+                placeholder="contact@yourrestaurant.com"
                 onChange={(e) => update({ email: e.target.value })}
               />
             </div>
           </div>
           <div className="field">
             <label>Website</label>
-            <input value={form.website} onChange={(e) => update({ website: e.target.value })} />
+            <input
+              value={form.website}
+              placeholder="https://..."
+              onChange={(e) => update({ website: e.target.value })}
+            />
           </div>
         </div>
       </div>
