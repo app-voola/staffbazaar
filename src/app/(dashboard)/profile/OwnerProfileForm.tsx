@@ -37,6 +37,20 @@ export function OwnerProfileForm() {
       return;
     }
     let cancelled = false;
+
+    const hydrate = (profile: Record<string, unknown> | null, authEmail: string, metaName: string) => {
+      const next: FormState = {
+        fullName: (profile?.full_name as string | null) ?? metaName,
+        email: (profile?.email as string | null) ?? authEmail,
+        phone: (profile?.phone as string | null) ?? '',
+        notifyApplicants: (profile?.notify_applicants as boolean | null) ?? true,
+        notifyWhatsapp: (profile?.notify_whatsapp as boolean | null) ?? true,
+        language: ((profile?.language as FormState['language'] | null) ?? 'English'),
+      };
+      setForm(next);
+      setSaved(next);
+    };
+
     (async () => {
       const [{ data: profile, error }, { data: authUser }] = await Promise.all([
         supabase.from('profiles').select('*').eq('owner_id', user.id).maybeSingle(),
@@ -47,21 +61,26 @@ export function OwnerProfileForm() {
 
       const authEmail = authUser.user?.email ?? '';
       const metaName = (authUser.user?.user_metadata?.full_name as string | undefined) ?? '';
-
-      const next: FormState = {
-        fullName: profile?.full_name ?? metaName,
-        email: profile?.email ?? authEmail,
-        phone: profile?.phone ?? '',
-        notifyApplicants: profile?.notify_applicants ?? true,
-        notifyWhatsapp: profile?.notify_whatsapp ?? true,
-        language: (profile?.language as FormState['language']) ?? 'English',
-      };
-      setForm(next);
-      setSaved(next);
+      hydrate(profile, authEmail, metaName);
       setLoading(false);
     })();
+
+    const channel = supabase
+      .channel(`profiles-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles', filter: `owner_id=eq.${user.id}` },
+        (payload) => {
+          if (payload.eventType === 'DELETE') return;
+          const row = payload.new as Record<string, unknown>;
+          hydrate(row, '', '');
+        },
+      )
+      .subscribe();
+
     return () => {
       cancelled = true;
+      supabase.removeChannel(channel);
     };
   }, [user?.id]);
 

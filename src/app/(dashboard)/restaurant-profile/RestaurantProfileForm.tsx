@@ -42,6 +42,23 @@ export function RestaurantProfileForm() {
       return;
     }
     let cancelled = false;
+
+    const hydrate = (data: Record<string, unknown> | null) => {
+      const next: FormState = {
+        name: (data?.name as string | null) ?? '',
+        type: (data?.type as string | null) ?? 'Casual Dining',
+        description: (data?.description as string | null) ?? '',
+        address: (data?.address as string | null) ?? '',
+        city: (data?.city as string | null) ?? 'Bangalore',
+        pin: (data?.pin as string | null) ?? '',
+        phone: (data?.phone as string | null) ?? '',
+        email: (data?.email as string | null) ?? '',
+        website: (data?.website as string | null) ?? '',
+      };
+      setForm(next);
+      setSaved(next);
+    };
+
     (async () => {
       const { data, error } = await supabase
         .from('restaurants')
@@ -49,26 +66,26 @@ export function RestaurantProfileForm() {
         .eq('owner_id', user.id)
         .maybeSingle();
       if (cancelled) return;
-      if (error) {
-        console.error('[restaurants] load failed', error);
-      }
-      const next: FormState = {
-        name: data?.name ?? '',
-        type: data?.type ?? 'Casual Dining',
-        description: data?.description ?? '',
-        address: data?.address ?? '',
-        city: data?.city ?? 'Bangalore',
-        pin: data?.pin ?? '',
-        phone: data?.phone ?? '',
-        email: data?.email ?? '',
-        website: data?.website ?? '',
-      };
-      setForm(next);
-      setSaved(next);
+      if (error) console.error('[restaurants] load failed', error);
+      hydrate(data as Record<string, unknown> | null);
       setLoading(false);
     })();
+
+    const channel = supabase
+      .channel(`restaurants-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'restaurants', filter: `owner_id=eq.${user.id}` },
+        (payload) => {
+          if (payload.eventType === 'DELETE') return;
+          hydrate(payload.new as Record<string, unknown>);
+        },
+      )
+      .subscribe();
+
     return () => {
       cancelled = true;
+      supabase.removeChannel(channel);
     };
   }, [user?.id]);
 
