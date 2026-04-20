@@ -15,9 +15,20 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const pickRole = (r: Role) => {
+  const pickRole = async (r: Role) => {
     setRole(r);
-    setTimeout(() => setStep('form'), 250);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sb_role', r);
+    }
+    const { data: sess } = await supabase.auth.getSession();
+    if (!sess.session) {
+      const { error: anonErr } = await supabase.auth.signInAnonymously();
+      if (anonErr) {
+        setError(`Anonymous sign-in failed: ${anonErr.message}. Enable it in Supabase → Auth → Providers.`);
+        return;
+      }
+    }
+    window.location.href = r === 'worker' ? '/worker-dashboard' : '/dashboard';
   };
 
   const signIn = async (e: React.FormEvent) => {

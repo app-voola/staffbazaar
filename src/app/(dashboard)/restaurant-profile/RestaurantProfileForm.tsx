@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { UnsavedPill } from '@/components/ui/UnsavedPill';
@@ -81,6 +81,7 @@ export function RestaurantProfileForm() {
   const [saved, setSaved] = useState<FormState>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!user) {
@@ -298,52 +299,59 @@ export function RestaurantProfileForm() {
   return (
     <>
       <div className="profile-content">
-        {/* Hero banner */}
-        <div
-          className="hero-banner"
-          style={
-            form.coverImage
-              ? { backgroundImage: `url(${form.coverImage})` }
-              : undefined
-          }
-        >
-          {!form.coverImage && <div className="hero-placeholder">No cover photo yet</div>}
-          <label className="hero-edit">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <polyline points="21 15 16 10 5 21" />
-            </svg>
-            Change Cover Photo
-            <input type="file" accept="image/*" onChange={handleCoverChange} hidden />
-          </label>
+        {/* Cover photo */}
+        <div className="form-section">
+          <h3>Cover Photo</h3>
+          <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverChange} hidden />
+          {form.coverImage ? (
+            <div className="cover-preview" style={{ backgroundImage: `url(${form.coverImage})` }}>
+              <button
+                type="button"
+                className="cover-change-btn"
+                onClick={() => coverInputRef.current?.click()}
+              >
+                Change
+              </button>
+            </div>
+          ) : (
+            <label className="cover-upload" onClick={() => coverInputRef.current?.click()}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              <span>Add Photo</span>
+            </label>
+          )}
         </div>
 
-        {/* Logo + name */}
-        <div className="logo-section">
-          <label className="logo-wrap">
-            {form.logoImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={form.logoImage} alt="Logo" />
-            ) : (
-              <span className="logo-placeholder">
-                {form.name ? form.name[0].toUpperCase() : 'R'}
+        {/* Logo */}
+        <div className="form-section">
+          <h3>Logo</h3>
+          <div className="logo-row">
+            <label className="logo-wrap">
+              {form.logoImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={form.logoImage} alt="Logo" />
+              ) : (
+                <span className="logo-placeholder">
+                  {form.name ? form.name[0].toUpperCase() : user?.full_name?.[0]?.toUpperCase() ?? 'R'}
+                </span>
+              )}
+              <span className="logo-camera">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                  <circle cx="12" cy="13" r="4" />
+                </svg>
               </span>
-            )}
-            <span className="logo-camera">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                <circle cx="12" cy="13" r="4" />
-              </svg>
-            </span>
-            <input type="file" accept="image/*" onChange={handleLogoChange} hidden />
-          </label>
-          <div className="logo-info">
-            <h1>{form.name || 'Your Restaurant'}</h1>
-            <p>
-              {form.type}
-              {form.city ? ` · ${form.city}` : ''}
-            </p>
+              <input type="file" accept="image/*" onChange={handleLogoChange} hidden />
+            </label>
+            <div className="logo-info">
+              <h1>{form.name || 'Your Restaurant'}</h1>
+              <p>
+                {form.type}
+                {form.city ? ` · ${form.city}` : ''}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -533,20 +541,21 @@ export function RestaurantProfileForm() {
       <style>{`
         .profile-content { max-width: 900px; padding-bottom: 80px; }
 
-        .hero-banner { position: relative; height: 260px; border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--cream), var(--sand)); background-size: cover; background-position: center; margin-bottom: 0; overflow: hidden; }
-        .hero-placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--charcoal-light); font-size: 14px; font-weight: 600; }
-        .hero-edit { position: absolute; right: 16px; bottom: 16px; display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 100px; background: white; color: var(--charcoal); font-size: 13px; font-weight: 700; cursor: pointer; font-family: var(--font-body); box-shadow: 0 6px 18px rgba(0,0,0,0.18); transition: all 0.2s; }
-        .hero-edit:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(0,0,0,0.22); }
-        .hero-edit svg { width: 16px; height: 16px; }
+        .cover-upload { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 200px; border: 2px dashed var(--sand); border-radius: var(--radius-lg); background: white; cursor: pointer; color: var(--stone); font-family: var(--font-body); font-size: 14px; font-weight: 600; transition: all 0.2s; }
+        .cover-upload:hover { border-color: var(--ember); color: var(--ember); background: var(--ember-glow); }
+        .cover-upload svg { width: 28px; height: 28px; }
+        .cover-preview { height: 200px; border-radius: var(--radius-lg); background-size: cover; background-position: center; border: 1.5px solid var(--sand); position: relative; }
+        .cover-change-btn { position: absolute; right: 12px; top: 12px; padding: 8px 16px; border: none; border-radius: 100px; background: white; color: var(--charcoal); font-size: 13px; font-weight: 700; cursor: pointer; font-family: var(--font-body); box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: all 0.2s; }
+        .cover-change-btn:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.2); }
 
-        .logo-section { display: flex; align-items: flex-end; gap: 20px; margin: -50px 0 28px; padding-left: 20px; position: relative; z-index: 5; }
-        .logo-wrap { position: relative; width: 112px; height: 112px; border-radius: 50%; background: white; box-shadow: 0 0 0 4px white, var(--shadow-md); overflow: visible; cursor: pointer; flex-shrink: 0; }
+        .logo-row { display: flex; align-items: center; gap: 16px; }
+        .logo-wrap { position: relative; width: 80px; height: 80px; border-radius: 50%; background: white; box-shadow: var(--shadow-md); cursor: pointer; flex-shrink: 0; }
         .logo-wrap img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
-        .logo-placeholder { width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: linear-gradient(145deg, var(--ember), var(--gold)); color: white; font-family: var(--font-display); font-size: 40px; }
-        .logo-camera { position: absolute; bottom: 2px; right: 2px; width: 30px; height: 30px; border-radius: 50%; background: var(--ember); border: 2px solid white; display: flex; align-items: center; justify-content: center; }
-        .logo-camera svg { width: 14px; height: 14px; color: white; }
-        .logo-info h1 { font-family: var(--font-display); font-size: 30px; line-height: 1.1; margin-bottom: 2px; }
-        .logo-info p { font-size: 14px; color: var(--charcoal-light); }
+        .logo-placeholder { width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: linear-gradient(145deg, var(--ember), var(--gold)); color: white; font-family: var(--font-display); font-size: 32px; }
+        .logo-camera { position: absolute; bottom: 2px; right: 2px; width: 26px; height: 26px; border-radius: 50%; background: var(--ember); border: 2px solid white; display: flex; align-items: center; justify-content: center; }
+        .logo-camera svg { width: 12px; height: 12px; color: white; }
+        .logo-info h1 { font-family: var(--font-display); font-size: 26px; line-height: 1.1; margin-bottom: 2px; }
+        .logo-info p { font-size: 13px; color: var(--charcoal-light); }
 
         .form-section { margin-bottom: 36px; }
         .form-section h3 { font-family: var(--font-display); font-size: 20px; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--sand); }
@@ -586,10 +595,8 @@ export function RestaurantProfileForm() {
           .form-row { grid-template-columns: 1fr; }
           .photos-grid { grid-template-columns: repeat(2, 1fr); }
           .hours-row { grid-template-columns: 60px 1fr 1fr; }
-          .logo-section { margin-top: -40px; }
-          .logo-wrap { width: 92px; height: 92px; }
-          .logo-info h1 { font-size: 24px; }
-          .hero-banner { height: 180px; }
+          .logo-wrap { width: 64px; height: 64px; }
+          .logo-info h1 { font-size: 20px; }
         }
       `}</style>
     </>
