@@ -99,7 +99,9 @@ export type TranslationKey =
   | 'jd_salary' | 'jd_per_month' | 'jd_requirements' | 'jd_description' | 'jd_about'
   | 'jd_apply_now' | 'jd_already_applied' | 'jd_apply_modal_title' | 'jd_add_message'
   | 'jd_message_placeholder' | 'jd_submit_application' | 'jd_shared_note'
-  | 'jd_loading' | 'jd_not_found' | 'jd_not_found_sub' | 'jd_back';
+  | 'jd_loading' | 'jd_not_found' | 'jd_not_found_sub' | 'jd_back'
+  // Per-message translation
+  | 'msg_translate' | 'msg_show_original' | 'msg_translating' | 'msg_translate_failed';
 
 type Dict = Record<TranslationKey, string>;
 
@@ -197,6 +199,8 @@ const en: Dict = {
   jd_shared_note: 'Your profile will be shared with the restaurant.',
   jd_loading: 'Loading job…', jd_not_found: 'Job not found',
   jd_not_found_sub: 'This job may have been closed or removed.', jd_back: 'Back',
+  msg_translate: 'Translate', msg_show_original: 'Show original',
+  msg_translating: 'Translating…', msg_translate_failed: 'Translation failed',
 };
 
 const hi: Dict = {
@@ -293,6 +297,8 @@ const hi: Dict = {
   jd_shared_note: 'आपकी प्रोफाइल रेस्तराँ के साथ शेयर की जाएगी।',
   jd_loading: 'लोड हो रहा है…', jd_not_found: 'नौकरी नहीं मिली',
   jd_not_found_sub: 'यह नौकरी बंद या हटा दी गई है।', jd_back: 'वापस',
+  msg_translate: 'अनुवाद', msg_show_original: 'मूल दिखाएँ',
+  msg_translating: 'अनुवाद हो रहा है…', msg_translate_failed: 'अनुवाद विफल',
 };
 
 // Tamil, Telugu, Kannada, Malayalam share English fallback for less-visible strings
@@ -394,6 +400,8 @@ const ta: Dict = { ...en,
   jd_shared_note: 'உங்கள் புரொபைல் ரெஸ்டாரன்டுடன் பகிரப்படும்.',
   jd_loading: 'ஏற்றுகிறது…', jd_not_found: 'வேலை கிடைக்கவில்லை',
   jd_not_found_sub: 'இந்த வேலை மூடப்பட்டிருக்கலாம்.', jd_back: 'பின் செல்',
+  msg_translate: 'மொழிபெயர்', msg_show_original: 'மூலம் காட்டு',
+  msg_translating: 'மொழிபெயர்க்கிறது…', msg_translate_failed: 'மொழிபெயர்ப்பு தோல்வி',
 };
 
 const te: Dict = { ...en,
@@ -492,6 +500,8 @@ const te: Dict = { ...en,
   jd_shared_note: 'మీ ప్రొఫైల్ రెస్టారెంట్‌తో షేర్ చేయబడుతుంది.',
   jd_loading: 'లోడ్ అవుతోంది…', jd_not_found: 'ఉద్యోగం దొరకలేదు',
   jd_not_found_sub: 'ఈ ఉద్యోగం మూసివేయబడి ఉండవచ్చు.', jd_back: 'వెనుకకు',
+  msg_translate: 'అనువదించు', msg_show_original: 'అసలు చూపించు',
+  msg_translating: 'అనువదిస్తోంది…', msg_translate_failed: 'అనువాదం విఫలమైంది',
 };
 
 const kn: Dict = { ...en,
@@ -590,6 +600,8 @@ const kn: Dict = { ...en,
   jd_shared_note: 'ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ರೆಸ್ಟೋರೆಂಟ್ ಜೊತೆ ಹಂಚಿಕೊಳ್ಳಲಾಗುತ್ತದೆ.',
   jd_loading: 'ಲೋಡ್ ಆಗುತ್ತಿದೆ…', jd_not_found: 'ಕೆಲಸ ಕಾಣಿಸಲಿಲ್ಲ',
   jd_not_found_sub: 'ಈ ಕೆಲಸ ಮುಚ್ಚಲ್ಪಟ್ಟಿರಬಹುದು.', jd_back: 'ಹಿಂದೆ',
+  msg_translate: 'ಅನುವಾದಿಸಿ', msg_show_original: 'ಮೂಲ ತೋರಿಸಿ',
+  msg_translating: 'ಅನುವಾದಿಸುತ್ತಿದೆ…', msg_translate_failed: 'ಅನುವಾದ ವಿಫಲ',
 };
 
 const ml: Dict = { ...en,
@@ -688,6 +700,8 @@ const ml: Dict = { ...en,
   jd_shared_note: 'നിങ്ങളുടെ പ്രൊഫൈൽ റെസ്റ്റോറന്റുമായി പങ്കിടും.',
   jd_loading: 'ലോഡ് ചെയ്യുന്നു…', jd_not_found: 'ജോലി കണ്ടെത്തിയില്ല',
   jd_not_found_sub: 'ഈ ജോലി അടച്ചിരിക്കാം.', jd_back: 'തിരികെ',
+  msg_translate: 'വിവർത്തനം', msg_show_original: 'യഥാർത്ഥം കാണിക്കുക',
+  msg_translating: 'വിവർത്തനം ചെയ്യുന്നു…', msg_translate_failed: 'വിവർത്തനം പരാജയപ്പെട്ടു',
 };
 
 export const TRANSLATIONS: Record<LangCode, Dict> = { en, hi, ta, te, kn, ml };

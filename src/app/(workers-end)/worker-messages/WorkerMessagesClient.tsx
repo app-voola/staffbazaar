@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkerI18n } from '@/contexts/WorkerI18nContext';
 import { supabase } from '@/lib/supabase';
+import { translateText } from '@/lib/translate-text';
 
 interface Conversation {
   id: string;
@@ -47,9 +48,17 @@ function formatShortTime(iso: string): string {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
+interface TranslationState {
+  text: string;
+  showing: 'original' | 'translated';
+  loading: boolean;
+  error: boolean;
+}
+
 export function WorkerMessagesClient() {
   const { user } = useAuth();
-  const { t } = useWorkerI18n();
+  const { t, lang } = useWorkerI18n();
+  const [translations, setTranslations] = useState<Record<string, TranslationState>>({});
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -193,6 +202,34 @@ export function WorkerMessagesClient() {
     if (filter === 'unread') return conversations.filter((c) => c.unread > 0);
     return conversations;
   }, [conversations, filter]);
+
+  const handleTranslate = async (id: string, originalText: string) => {
+    const existing = translations[id];
+    if (existing) {
+      // Toggle between original and translated
+      setTranslations((prev) => ({
+        ...prev,
+        [id]: { ...existing, showing: existing.showing === 'original' ? 'translated' : 'original' },
+      }));
+      return;
+    }
+    setTranslations((prev) => ({
+      ...prev,
+      [id]: { text: '', showing: 'translated', loading: true, error: false },
+    }));
+    try {
+      const translated = await translateText(originalText, lang);
+      setTranslations((prev) => ({
+        ...prev,
+        [id]: { text: translated, showing: 'translated', loading: false, error: false },
+      }));
+    } catch {
+      setTranslations((prev) => ({
+        ...prev,
+        [id]: { text: '', showing: 'original', loading: false, error: true },
+      }));
+    }
+  };
 
   const send = async () => {
     const text = draft.trim();
@@ -354,12 +391,34 @@ export function WorkerMessagesClient() {
                   {t('msg_say_hello')}
                 </div>
               ) : (
-                messages.map((m) => (
-                  <div key={m.id} className={`chat-bubble ${m.from_me ? 'received' : 'sent'}`}>
-                    <p>{m.text}</p>
-                    <div className="bubble-time">{formatTime(m.created_at)}</div>
-                  </div>
-                ))
+                messages.map((m) => {
+                  const tr = translations[m.id];
+                  const displayText = tr && tr.showing === 'translated' && tr.text ? tr.text : m.text;
+                  const showTranslateBtn = m.from_me && lang !== 'en' && !tr?.loading;
+                  const showLoading = tr?.loading;
+                  return (
+                    <div key={m.id} className={`chat-bubble ${m.from_me ? 'received' : 'sent'}`}>
+                      <p>{displayText}</p>
+                      <div className="bubble-meta">
+                        <span className="bubble-time">{formatTime(m.created_at)}</span>
+                        {showLoading && <span className="bubble-translating">{t('msg_translating')}</span>}
+                        {showTranslateBtn && (
+                          <button
+                            type="button"
+                            className="bubble-translate-btn"
+                            onClick={() => handleTranslate(m.id, m.text)}
+                          >
+                            {tr?.error
+                              ? t('msg_translate_failed')
+                              : tr?.showing === 'translated'
+                                ? t('msg_show_original')
+                                : t('msg_translate')}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
               )}
               <div ref={bottomRef} />
             </div>
@@ -447,9 +506,14 @@ export function WorkerMessagesClient() {
         .chat-thread { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
         .chat-bubble { max-width: 72%; padding: 10px 14px; border-radius: 16px; font-size: 14px; line-height: 1.4; }
         .chat-bubble p { margin: 0; white-space: pre-wrap; word-break: break-word; }
-        .bubble-time { font-size: 10px; opacity: 0.7; margin-top: 4px; }
+        .bubble-meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+        .bubble-time { font-size: 10px; opacity: 0.7; }
+        .bubble-translating { font-size: 10px; opacity: 0.7; font-style: italic; }
+        .bubble-translate-btn { background: none; border: none; padding: 0; font-size: 11px; font-weight: 600; color: inherit; opacity: 0.8; cursor: pointer; font-family: var(--font-body); text-decoration: underline; }
+        .bubble-translate-btn:hover { opacity: 1; }
         .chat-bubble.sent { align-self: flex-end; background: var(--ember); color: white; border-bottom-right-radius: 4px; }
         .chat-bubble.received { align-self: flex-start; background: white; color: var(--charcoal); border-bottom-left-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+        .chat-bubble.received .bubble-translate-btn { color: var(--ember); opacity: 1; }
 
         .chat-input-bar { display: flex; gap: 8px; padding: 14px 20px; background: white; border-top: 1px solid var(--sand); }
         .chat-input-bar input { flex: 1; padding: 12px 16px; border: 1.5px solid var(--sand); border-radius: 100px; background: var(--cream); font-size: 14px; font-family: var(--font-body); color: var(--charcoal); }
