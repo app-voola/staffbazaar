@@ -77,17 +77,13 @@ const accountItems: NavItem[] = [
 
 export function WorkerSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const { logout } = useAuth();
   const { t } = useWorkerI18n();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     onNavigate?.();
-    // Intentionally do NOT call supabase.auth.signOut() here.
-    // Anonymous workers can't re-authenticate, so signing out would
-    // orphan their applications and saved jobs. We just clear the role
-    // marker and go back to the login picker; the anon session stays
-    // persisted in localStorage so the next "Worker" click resumes as
-    // the same auth.uid().
     if (typeof window !== 'undefined') localStorage.removeItem('sb_role');
+    await logout();
     window.location.href = '/login';
   };
 

@@ -23,7 +23,12 @@ export default function AuthCallbackPage() {
       const { data } = await supabase.auth.getSession();
       // Use replace + cache-busting query so the target page isn't served
       // from a stale Vercel edge cache after the OAuth round-trip.
-      const target = data.session ? '/dashboard' : '/login';
+      const role = typeof window !== 'undefined' ? localStorage.getItem('sb_role') : null;
+      const target = data.session
+        ? role === 'worker'
+          ? '/worker-dashboard'
+          : '/dashboard'
+        : '/login';
       window.location.replace(`${target}?t=${Date.now()}`);
     })();
   }, []);

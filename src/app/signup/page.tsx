@@ -1,15 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+
+type Role = 'worker' | 'owner';
 
 export default function SignupPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState<Role>('owner');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = localStorage.getItem('sb_role') as Role | null;
+    if (stored === 'worker' || stored === 'owner') setRole(stored);
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,10 +38,12 @@ export default function SignupPage() {
     setError('');
     setBusy(true);
 
+    const target = role === 'worker' ? '/worker-dashboard' : '/dashboard';
+
     const { data, error: sErr } = await supabase.auth.signUp({
       email: trimmed,
       password,
-      options: { data: { full_name: fullName.trim() } },
+      options: { data: { full_name: fullName.trim(), role } },
     });
 
     if (sErr && /already/i.test(sErr.message)) {
@@ -45,7 +56,7 @@ export default function SignupPage() {
         setError(lErr.message);
         return;
       }
-      window.location.href = '/dashboard';
+      window.location.href = target;
       return;
     }
 
@@ -56,7 +67,7 @@ export default function SignupPage() {
     }
 
     if (data.session) {
-      window.location.href = '/dashboard';
+      window.location.href = target;
       return;
     }
 
@@ -75,6 +86,23 @@ export default function SignupPage() {
 
         <h1 className="auth-heading">Create your account</h1>
         <p className="auth-sub">Join StaffBazaar in 30 seconds</p>
+
+        <div className="role-toggle">
+          <button
+            type="button"
+            className={`role-toggle-btn${role === 'worker' ? ' active' : ''}`}
+            onClick={() => setRole('worker')}
+          >
+            I&apos;m looking for work
+          </button>
+          <button
+            type="button"
+            className={`role-toggle-btn${role === 'owner' ? ' active' : ''}`}
+            onClick={() => setRole('owner')}
+          >
+            I&apos;m hiring staff
+          </button>
+        </div>
 
         <form onSubmit={submit} noValidate>
           <div className="field">
@@ -142,6 +170,11 @@ export default function SignupPage() {
         .auth-logo em { color: var(--ember); font-style: italic; }
         .auth-heading { font-family: var(--font-display); font-size: 32px; text-align: center; margin-bottom: 4px; }
         .auth-sub { text-align: center; font-size: 15px; color: var(--charcoal-light); margin-bottom: 28px; }
+        .role-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; padding: 4px; background: var(--cream); border-radius: 100px; }
+        .role-toggle-btn { padding: 10px 14px; border-radius: 100px; background: transparent; border: none; font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--charcoal-light); cursor: pointer; transition: all 0.2s; }
+        .role-toggle-btn:hover { color: var(--charcoal); }
+        .role-toggle-btn.active { background: white; color: var(--ember); box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+
         .field { margin-bottom: 14px; }
         .field label { display: block; font-size: 13px; font-weight: 600; color: var(--charcoal); margin-bottom: 8px; }
         .field input { width: 100%; padding: 14px 16px; border: 1.5px solid var(--sand); border-radius: var(--radius-md); background: white; font-size: 15px; font-family: var(--font-body); color: var(--charcoal); transition: border-color 0.2s; }
