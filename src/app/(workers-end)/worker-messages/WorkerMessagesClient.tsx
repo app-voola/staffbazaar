@@ -48,17 +48,12 @@ function formatShortTime(iso: string): string {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
-interface TranslationState {
-  text: string;
-  showing: 'original' | 'translated';
-  loading: boolean;
-  error: boolean;
-}
-
 export function WorkerMessagesClient() {
   const { user } = useAuth();
   const { t, lang } = useWorkerI18n();
-  const [translations, setTranslations] = useState<Record<string, TranslationState>>({});
+  // cache: key = `${messageId}:${targetLang}` → translated text
+  const [translationCache, setTranslationCache] = useState<Record<string, string>>({});
+  const [translationPending, setTranslationPending] = useState<Set<string>>(new Set());
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -104,11 +99,54 @@ export function WorkerMessagesClient() {
       .filter((r) => r.jobs && !existingOwners.has(r.jobs.owner_id))
       .filter((r, i, self) => self.findIndex((x) => x.jobs?.owner_id === r.jobs?.owner_id) === i);
 
+    // Clean any duplicate welcome messages, then make sure each conversation has exactly one
+    const existingConvs = (existing ?? []) as Array<{ owner_id: string | null }>;
+    for (const c of existingConvs) {
+      if (!c.owner_id) continue;
+      const convId = `conv-${user.id}-${c.owner_id}`;
+      const welcomeId = `${convId}-welcome`;
+
+      // Remove any stale welcome messages with legacy ID pattern (welcome-<timestamp>)
+      await supabase
+        .from('messages')
+        .delete()
+        .eq('conversation_id', convId)
+        .eq('from_me', true)
+        .like('id', `${convId}-welcome-%`);
+
+      // Check if the canonical welcome already exists
+      const { data: alreadyHas } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('id', welcomeId)
+        .maybeSingle();
+      if (alreadyHas) continue;
+
+      const matchingApp = rows.find((r) => r.jobs?.owner_id === c.owner_id);
+      const role = matchingApp?.role ?? 'role';
+      const rest = restMap[c.owner_id];
+      const name = rest?.name ?? 'Restaurant';
+      const welcomeText = `Thanks for your interest in the ${role} role at ${name}. We will review your application and get back to you shortly.`;
+      await supabase.from('messages').insert({
+        id: welcomeId,
+        conversation_id: convId,
+        from_me: true,
+        text: welcomeText,
+        time: new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }),
+      });
+      await supabase
+        .from('conversations')
+        .update({ last_message: welcomeText, updated_at: new Date().toISOString() })
+        .eq('id', convId);
+    }
+
     for (const r of missing) {
       if (!r.jobs) continue;
       const rest = restMap[r.jobs.owner_id];
       const name = rest?.name ?? 'Restaurant';
       const convId = `conv-${user.id}-${r.jobs.owner_id}`;
+      const welcomeText = `Thanks for your interest in the ${r.role} role at ${name}. We will review your application and get back to you shortly.`;
+      const timeStr = new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
       await supabase.from('conversations').insert({
         id: convId,
         worker_id: user.id,
@@ -117,11 +155,28 @@ export function WorkerMessagesClient() {
         role: r.role,
         avatar: rest?.cover_image ?? null,
         initials: name[0]?.toUpperCase() ?? 'R',
-        last_message: `${workerName} applied for ${r.role}`,
-        time: new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }),
+        last_message: welcomeText,
+        time: timeStr,
         unread: 1,
         type: 'active',
       });
+      const now = Date.now();
+      await supabase.from('messages').insert([
+        {
+          id: `${convId}-${now}`,
+          conversation_id: convId,
+          from_me: false,
+          text: `${workerName} applied for ${r.role}`,
+          time: timeStr,
+        },
+        {
+          id: `${convId}-${now + 1}`,
+          conversation_id: convId,
+          from_me: true,
+          text: welcomeText,
+          time: timeStr,
+        },
+      ]);
     }
   };
 
@@ -203,33 +258,50 @@ export function WorkerMessagesClient() {
     return conversations;
   }, [conversations, filter]);
 
-  const handleTranslate = async (id: string, originalText: string) => {
-    const existing = translations[id];
-    if (existing) {
-      // Toggle between original and translated
-      setTranslations((prev) => ({
-        ...prev,
-        [id]: { ...existing, showing: existing.showing === 'original' ? 'translated' : 'original' },
-      }));
-      return;
-    }
-    setTranslations((prev) => ({
-      ...prev,
-      [id]: { text: '', showing: 'translated', loading: true, error: false },
-    }));
-    try {
-      const translated = await translateText(originalText, lang);
-      setTranslations((prev) => ({
-        ...prev,
-        [id]: { text: translated, showing: 'translated', loading: false, error: false },
-      }));
-    } catch {
-      setTranslations((prev) => ({
-        ...prev,
-        [id]: { text: '', showing: 'original', loading: false, error: true },
-      }));
-    }
-  };
+  // Auto-translate all messages when the language is not English
+  useEffect(() => {
+    if (lang === 'en' || messages.length === 0) return;
+    let cancelled = false;
+
+    const toTranslate = messages.filter((m) => {
+      if (!m.text.trim()) return false;
+      const key = `${m.id}:${lang}`;
+      return translationCache[key] === undefined && !translationPending.has(key);
+    });
+    if (toTranslate.length === 0) return;
+
+    setTranslationPending((prev) => {
+      const next = new Set(prev);
+      toTranslate.forEach((m) => next.add(`${m.id}:${lang}`));
+      return next;
+    });
+
+    (async () => {
+      for (const m of toTranslate) {
+        const key = `${m.id}:${lang}`;
+        try {
+          const translated = await translateText(m.text, lang);
+          if (cancelled) return;
+          setTranslationCache((prev) => ({ ...prev, [key]: translated }));
+        } catch {
+          if (cancelled) return;
+          setTranslationCache((prev) => ({ ...prev, [key]: m.text }));
+        } finally {
+          if (!cancelled) {
+            setTranslationPending((prev) => {
+              const next = new Set(prev);
+              next.delete(key);
+              return next;
+            });
+          }
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [messages, lang, translationCache, translationPending]);
 
   const send = async () => {
     const text = draft.trim();
@@ -392,29 +464,16 @@ export function WorkerMessagesClient() {
                 </div>
               ) : (
                 messages.map((m) => {
-                  const tr = translations[m.id];
-                  const displayText = tr && tr.showing === 'translated' && tr.text ? tr.text : m.text;
-                  const showTranslateBtn = m.from_me && lang !== 'en' && !tr?.loading;
-                  const showLoading = tr?.loading;
+                  const cacheKey = `${m.id}:${lang}`;
+                  const cached = translationCache[cacheKey];
+                  const isPending = translationPending.has(cacheKey);
+                  const displayText = lang === 'en' ? m.text : cached ?? m.text;
                   return (
                     <div key={m.id} className={`chat-bubble ${m.from_me ? 'received' : 'sent'}`}>
                       <p>{displayText}</p>
                       <div className="bubble-meta">
                         <span className="bubble-time">{formatTime(m.created_at)}</span>
-                        {showLoading && <span className="bubble-translating">{t('msg_translating')}</span>}
-                        {showTranslateBtn && (
-                          <button
-                            type="button"
-                            className="bubble-translate-btn"
-                            onClick={() => handleTranslate(m.id, m.text)}
-                          >
-                            {tr?.error
-                              ? t('msg_translate_failed')
-                              : tr?.showing === 'translated'
-                                ? t('msg_show_original')
-                                : t('msg_translate')}
-                          </button>
-                        )}
+                        {isPending && <span className="bubble-translating">{t('msg_translating')}</span>}
                       </div>
                     </div>
                   );

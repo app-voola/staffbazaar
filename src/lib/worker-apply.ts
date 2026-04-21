@@ -47,6 +47,7 @@ export async function applyToJob(user: UserLike, job: JobLike): Promise<{ error:
     .maybeSingle();
 
   if (!existing) {
+    const welcomeText = `Thanks for your interest in the ${job.role} role at ${restName}. We will review your application and get back to you shortly.`;
     await supabase.from('conversations').insert({
       id: convId,
       worker_id: user.id,
@@ -55,19 +56,31 @@ export async function applyToJob(user: UserLike, job: JobLike): Promise<{ error:
       role: job.role,
       avatar: job.restaurant_cover ?? null,
       initials: initials(restName),
-      last_message: `${workerName} applied for ${job.role}`,
+      last_message: welcomeText,
       time: timeLabel(),
       unread: 1,
       type: 'active',
     });
 
-    await supabase.from('messages').insert({
-      id: `${convId}-${Date.now()}`,
-      conversation_id: convId,
-      from_me: false,
-      text: `Hi, I just applied for the ${job.role} position. Looking forward to hearing from you!`,
-      time: timeLabel(),
-    });
+    await supabase.from('messages').upsert(
+      [
+        {
+          id: `${convId}-greeting`,
+          conversation_id: convId,
+          from_me: false,
+          text: `Hi, I just applied for the ${job.role} position. Looking forward to hearing from you!`,
+          time: timeLabel(),
+        },
+        {
+          id: `${convId}-welcome`,
+          conversation_id: convId,
+          from_me: true,
+          text: welcomeText,
+          time: timeLabel(),
+        },
+      ],
+      { onConflict: 'id' },
+    );
   }
 
   return { error: null };
