@@ -76,7 +76,7 @@ export function NotificationsClient() {
   const { t } = useWorkerI18n();
   const [items, setItems] = useState<Notif[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<FilterKey>('jobs');
+  const [filter, setFilter] = useState<FilterKey>('all');
 
   const load = async () => {
     if (!user) return;
