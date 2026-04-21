@@ -84,23 +84,34 @@ export function WorkerSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
   const [savedCount, setSavedCount] = useState(0);
+  const [newJobsCount, setNewJobsCount] = useState(0);
+  const [appUpdatesCount, setAppUpdatesCount] = useState(0);
+  const [profileIncomplete, setProfileIncomplete] = useState(false);
 
   useEffect(() => {
     if (!user) {
       setUnreadMessages(0);
       setUnreadNotifs(0);
       setSavedCount(0);
+      setNewJobsCount(0);
+      setAppUpdatesCount(0);
+      setProfileIncomplete(false);
       return;
     }
     let cancelled = false;
 
     const load = async () => {
-      const [convs, notifs, saved] = await Promise.all([
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const [convs, notifs, saved, newJobs, apps, profile] = await Promise.all([
         supabase.from('conversations').select('unread').eq('worker_id', user.id),
         supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('read', false),
         supabase.from('saved_jobs').select('job_id', { count: 'exact', head: true }).eq('worker_id', user.id),
+        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'active').gte('created_at', twentyFourHoursAgo),
+        supabase.from('applicants').select('stage').eq('worker_id', user.id),
+        supabase.from('worker_profiles').select('full_name, role, experience_years, city, phone, bio, salary_expected').eq('worker_id', user.id).maybeSingle(),
       ]);
       if (cancelled) return;
+
       const msgTotal = (convs.data ?? []).reduce(
         (sum: number, c: { unread?: number }) => sum + (c.unread ?? 0),
         0,
@@ -108,6 +119,22 @@ export function WorkerSidebar({ onNavigate }: { onNavigate?: () => void }) {
       setUnreadMessages(msgTotal);
       setUnreadNotifs(notifs.count ?? 0);
       setSavedCount(saved.count ?? 0);
+      setNewJobsCount(newJobs.count ?? 0);
+
+      // "Updates" = applications that have progressed past 'applied' (viewed, shortlisted, called, hired)
+      const stageRows = (apps.data ?? []) as Array<{ stage: string }>;
+      const progressed = stageRows.filter((a) =>
+        ['viewed', 'shortlisted', 'called', 'hired'].includes(a.stage),
+      ).length;
+      setAppUpdatesCount(progressed);
+
+      const p = profile.data as Record<string, unknown> | null;
+      const fields = ['full_name', 'role', 'experience_years', 'city', 'phone', 'bio', 'salary_expected'];
+      const filled = p ? fields.filter((f) => {
+        const v = p[f];
+        return v !== null && v !== undefined && v !== '' && v !== 0;
+      }).length : 0;
+      setProfileIncomplete(filled < fields.length);
     };
 
     load();
@@ -117,6 +144,9 @@ export function WorkerSidebar({ onNavigate }: { onNavigate?: () => void }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations', filter: `worker_id=eq.${user.id}` }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'saved_jobs', filter: `worker_id=eq.${user.id}` }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'applicants', filter: `worker_id=eq.${user.id}` }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'worker_profiles', filter: `worker_id=eq.${user.id}` }, () => load())
       .subscribe();
 
     return () => {
@@ -134,10 +164,13 @@ export function WorkerSidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   const isActive = (href: string) => pathname?.startsWith(href);
 
-  const badgeFor = (key: TranslationKey): number => {
+  const badgeFor = (key: TranslationKey): string | number => {
     if (key === 'nav_messages') return unreadMessages;
     if (key === 'nav_notifications') return unreadNotifs;
     if (key === 'nav_saved') return savedCount;
+    if (key === 'nav_find_jobs') return newJobsCount;
+    if (key === 'nav_applications') return appUpdatesCount;
+    if (key === 'nav_profile') return profileIncomplete ? '!' : 0;
     return 0;
   };
 
@@ -164,7 +197,7 @@ export function WorkerSidebar({ onNavigate }: { onNavigate?: () => void }) {
           >
             {item.icon}
             <span>{t(item.labelKey)}</span>
-            {badge > 0 && <span className="sidebar-badge">{badge}</span>}
+            {Boolean(badge) && badge !== 0 && <span className="sidebar-badge">{badge}</span>}
           </Link>
         );
       })}
@@ -181,7 +214,7 @@ export function WorkerSidebar({ onNavigate }: { onNavigate?: () => void }) {
           >
             {item.icon}
             <span>{t(item.labelKey)}</span>
-            {badge > 0 && <span className="sidebar-badge">{badge}</span>}
+            {Boolean(badge) && badge !== 0 && <span className="sidebar-badge">{badge}</span>}
           </Link>
         );
       })}
