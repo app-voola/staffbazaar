@@ -61,6 +61,9 @@ export function WorkerMessagesClient() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<ConvFilter>('all');
   const [applicationsCount, setApplicationsCount] = useState(0);
+  const [restaurantByOwner, setRestaurantByOwner] = useState<
+    Record<string, { name: string; cover_image: string | null }>
+  >({});
   const bottomRef = useRef<HTMLDivElement>(null);
   const activeIdRef = useRef<string | null>(null);
 
@@ -148,14 +151,16 @@ export function WorkerMessagesClient() {
       const convId = `conv-${user.id}-${r.jobs.owner_id}`;
       const welcomeText = `Thanks for your interest in the ${r.role} role at ${name}. We will review your application and get back to you shortly.`;
       const timeStr = new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+      // Store worker name so owner sees who applied; worker UI resolves
+      // restaurant name separately from owner_id.
       await supabase.from('conversations').insert({
         id: convId,
         worker_id: user.id,
         owner_id: r.jobs.owner_id,
-        name,
+        name: workerName,
         role: r.role,
-        avatar: rest?.cover_image ?? null,
-        initials: name[0]?.toUpperCase() ?? 'R',
+        avatar: null,
+        initials: workerName[0]?.toUpperCase() ?? 'W',
         last_message: welcomeText,
         time: timeStr,
         unread: 1,
@@ -191,8 +196,29 @@ export function WorkerMessagesClient() {
         .order('updated_at', { ascending: false }),
       supabase.from('applicants').select('id', { count: 'exact', head: true }).eq('worker_id', user.id),
     ]);
-    setConversations((convRes.data ?? []) as Conversation[]);
+
+    const convs = (convRes.data ?? []) as Conversation[];
+    setConversations(convs);
     setApplicationsCount(appsRes.count ?? 0);
+
+    // Look up restaurant info so we display restaurant name + cover instead
+    // of the owner-facing worker name that's stored in conversations.name.
+    const ownerIds = Array.from(
+      new Set(convs.map((c) => c.owner_id).filter((v): v is string => !!v)),
+    );
+    if (ownerIds.length) {
+      const { data: rests } = await supabase
+        .from('restaurants')
+        .select('owner_id, name, cover_image')
+        .in('owner_id', ownerIds);
+      const map: Record<string, { name: string; cover_image: string | null }> = {};
+      (rests ?? []).forEach((r: { owner_id: string; name: string; cover_image: string | null }) => {
+        map[r.owner_id] = { name: r.name, cover_image: r.cover_image };
+      });
+      setRestaurantByOwner(map);
+    } else {
+      setRestaurantByOwner({});
+    }
   };
 
   const loadMessages = async (convId: string) => {
@@ -393,35 +419,41 @@ export function WorkerMessagesClient() {
               </span>
             </div>
           ) : (
-            filtered.map((c) => (
-              <div
-                key={c.id}
-                className={`chat-item${c.unread > 0 ? ' unread' : ''}${c.id === activeId ? ' active' : ''}`}
-                onClick={() => setActiveId(c.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') setActiveId(c.id);
-                }}
-              >
-                <div className="chat-avatar">
-                  {c.avatar ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={c.avatar} alt={c.name} />
-                  ) : (
-                    <span>{c.initials ?? (c.name?.[0] ?? 'R').toUpperCase()}</span>
-                  )}
+            filtered.map((c) => {
+              const rest = c.owner_id ? restaurantByOwner[c.owner_id] : undefined;
+              const displayName = rest?.name ?? c.name;
+              const displayAvatar = rest?.cover_image ?? c.avatar;
+              const displayInitials = (displayName?.[0] ?? 'R').toUpperCase();
+              return (
+                <div
+                  key={c.id}
+                  className={`chat-item${c.unread > 0 ? ' unread' : ''}${c.id === activeId ? ' active' : ''}`}
+                  onClick={() => setActiveId(c.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') setActiveId(c.id);
+                  }}
+                >
+                  <div className="chat-avatar">
+                    {displayAvatar ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={displayAvatar} alt={displayName} />
+                    ) : (
+                      <span>{displayInitials}</span>
+                    )}
+                  </div>
+                  <div className="chat-info">
+                    <div className="chat-name">{displayName}</div>
+                    <div className="chat-last-message">{c.last_message ?? 'New conversation'}</div>
+                  </div>
+                  <div className="chat-meta">
+                    <span className="chat-time">{c.time ?? formatShortTime(c.updated_at)}</span>
+                    {c.unread > 0 && <span className="chat-unread-badge">{c.unread}</span>}
+                  </div>
                 </div>
-                <div className="chat-info">
-                  <div className="chat-name">{c.name}</div>
-                  <div className="chat-last-message">{c.last_message ?? 'New conversation'}</div>
-                </div>
-                <div className="chat-meta">
-                  <span className="chat-time">{c.time ?? formatShortTime(c.updated_at)}</span>
-                  {c.unread > 0 && <span className="chat-unread-badge">{c.unread}</span>}
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -444,19 +476,29 @@ export function WorkerMessagesClient() {
                 </svg>
                 Back
               </button>
-              <div className="chat-avatar">
-                {activeConv.avatar ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={activeConv.avatar} alt={activeConv.name} />
-                ) : (
-                  <span>{activeConv.initials ?? (activeConv.name[0] ?? 'R').toUpperCase()}</span>
-                )}
-              </div>
-              <div className="thread-header-info">
-                <span className="name">{activeConv.name}</span>
-                {activeConv.role && <span className="role-badge">{activeConv.role}</span>}
-                <div className="status-text">{t('online_status')}</div>
-              </div>
+              {(() => {
+                const rest = activeConv.owner_id ? restaurantByOwner[activeConv.owner_id] : undefined;
+                const displayName = rest?.name ?? activeConv.name;
+                const displayAvatar = rest?.cover_image ?? activeConv.avatar;
+                const displayInitials = (displayName?.[0] ?? 'R').toUpperCase();
+                return (
+                  <>
+                    <div className="chat-avatar">
+                      {displayAvatar ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={displayAvatar} alt={displayName} />
+                      ) : (
+                        <span>{displayInitials}</span>
+                      )}
+                    </div>
+                    <div className="thread-header-info">
+                      <span className="name">{displayName}</span>
+                      {activeConv.role && <span className="role-badge">{activeConv.role}</span>}
+                      <div className="status-text">{t('online_status')}</div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             <div className="quick-replies">
