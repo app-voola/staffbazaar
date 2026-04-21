@@ -62,6 +62,7 @@ export function WorkerMessagesClient() {
   const [filter, setFilter] = useState<ConvFilter>('all');
   const [applicationsCount, setApplicationsCount] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const activeIdRef = useRef<string | null>(null);
 
   const backfillConversations = async () => {
     if (!user) return;
@@ -222,7 +223,9 @@ export function WorkerMessagesClient() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'applicants', filter: `worker_id=eq.${user.id}` }, () => loadConversations())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         const m = payload.new as Message;
-        if (m.conversation_id === activeId) setMessages((ms) => [...ms, m]);
+        if (m.conversation_id === activeIdRef.current) {
+          setMessages((ms) => (ms.some((x) => x.id === m.id) ? ms : [...ms, m]));
+        }
         loadConversations();
       })
       .subscribe();
@@ -234,6 +237,7 @@ export function WorkerMessagesClient() {
   }, [user?.id]);
 
   useEffect(() => {
+    activeIdRef.current = activeId;
     if (!activeId) {
       setMessages([]);
       return;
@@ -321,11 +325,21 @@ export function WorkerMessagesClient() {
     };
     setMessages((ms) => [...ms, msg]);
     await supabase.from('messages').insert({ id, conversation_id: activeConv.id, from_me: false, text });
+
+    // Increment unread so the owner's sidebar badge lights up on their end
+    const { data: convRow } = await supabase
+      .from('conversations')
+      .select('unread')
+      .eq('id', activeConv.id)
+      .maybeSingle();
+    const nextUnread = (convRow?.unread ?? 0) + 1;
+
     await supabase
       .from('conversations')
       .update({
         last_message: text,
         time: formatTime(new Date().toISOString()),
+        unread: nextUnread,
         updated_at: new Date().toISOString(),
       })
       .eq('id', activeConv.id);

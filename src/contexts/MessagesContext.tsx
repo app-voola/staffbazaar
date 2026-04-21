@@ -223,9 +223,22 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
     });
     if (msgErr) console.error('[messages] insert failed', msgErr);
 
+    // Increment unread so the recipient's sidebar badge lights up
+    const { data: convRow } = await supabase
+      .from('conversations')
+      .select('unread')
+      .eq('id', convId)
+      .maybeSingle();
+    const nextUnread = (convRow?.unread ?? 0) + 1;
+
     const { error: convErr } = await supabase
       .from('conversations')
-      .update({ last_message: text, time: 'Just now', updated_at: new Date().toISOString() })
+      .update({
+        last_message: text,
+        time: 'Just now',
+        unread: nextUnread,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', convId);
     if (convErr) console.error('[conversations] update failed', convErr);
   }, []);
