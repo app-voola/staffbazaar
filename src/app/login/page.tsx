@@ -20,15 +20,35 @@ export default function LoginPage() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('sb_role', r);
     }
+
+    if (r === 'owner') {
+      // Owners must authenticate with real credentials so their data
+      // (jobs, restaurant profile, etc.) stays tied to a stable auth.uid().
+      // If a real session already exists, go straight in; otherwise show the form.
+      const { data: sess } = await supabase.auth.getSession();
+      const isReal = !!sess.session && !sess.session.user.is_anonymous;
+      if (isReal) {
+        window.location.href = '/dashboard';
+        return;
+      }
+      setStep('form');
+      return;
+    }
+
+    // Worker side uses anonymous auth for quick testing.
     const { data: sess } = await supabase.auth.getSession();
-    if (!sess.session) {
+    if (!sess.session || sess.session.user.is_anonymous === false) {
+      // If a real (owner) session is active, sign it out before going anonymous
+      if (sess.session && sess.session.user.is_anonymous === false) {
+        await supabase.auth.signOut();
+      }
       const { error: anonErr } = await supabase.auth.signInAnonymously();
       if (anonErr) {
         setError(`Anonymous sign-in failed: ${anonErr.message}. Enable it in Supabase → Auth → Providers.`);
         return;
       }
     }
-    window.location.href = r === 'worker' ? '/worker-dashboard' : '/dashboard';
+    window.location.href = '/worker-dashboard';
   };
 
   const signIn = async (e: React.FormEvent) => {
