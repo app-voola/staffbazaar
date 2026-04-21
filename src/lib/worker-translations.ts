@@ -94,7 +94,12 @@ export type TranslationKey =
   | 'time_just_now' | 'time_today' | 'time_hours_ago' | 'time_day_ago' | 'time_days_ago'
   | 'time_week_ago' | 'time_weeks_ago' | 'time_yesterday'
   // Other labels
-  | 'applied_prefix' | 'online_status' | 'search_label' | 'salary_fixed' | 'search_placeholder_main';
+  | 'applied_prefix' | 'online_status' | 'search_label' | 'salary_fixed' | 'search_placeholder_main'
+  // Job detail
+  | 'jd_salary' | 'jd_per_month' | 'jd_requirements' | 'jd_description' | 'jd_about'
+  | 'jd_apply_now' | 'jd_already_applied' | 'jd_apply_modal_title' | 'jd_add_message'
+  | 'jd_message_placeholder' | 'jd_submit_application' | 'jd_shared_note'
+  | 'jd_loading' | 'jd_not_found' | 'jd_not_found_sub' | 'jd_back';
 
 type Dict = Record<TranslationKey, string>;
 
@@ -183,6 +188,15 @@ const en: Dict = {
   time_days_ago: 'days ago', time_week_ago: '1 week ago', time_weeks_ago: 'weeks ago', time_yesterday: 'Yesterday',
   applied_prefix: 'Applied', online_status: 'Online', search_label: 'Search',
   salary_fixed: 'FIXED', search_placeholder_main: 'Search jobs, role, restaurant…',
+  jd_salary: 'Salary', jd_per_month: 'per month', jd_requirements: 'Requirements',
+  jd_description: 'Job Description', jd_about: 'About',
+  jd_apply_now: 'Apply Now', jd_already_applied: 'Already Applied',
+  jd_apply_modal_title: 'Apply to', jd_add_message: 'Add a short message (optional)',
+  jd_message_placeholder: "Tell them why you're a great fit…",
+  jd_submit_application: 'Submit Application',
+  jd_shared_note: 'Your profile will be shared with the restaurant.',
+  jd_loading: 'Loading job…', jd_not_found: 'Job not found',
+  jd_not_found_sub: 'This job may have been closed or removed.', jd_back: 'Back',
 };
 
 const hi: Dict = {
@@ -270,6 +284,15 @@ const hi: Dict = {
   time_days_ago: 'दिन पहले', time_week_ago: '1 हफ्ते पहले', time_weeks_ago: 'हफ्ते पहले', time_yesterday: 'कल',
   applied_prefix: 'अप्लाई किया', online_status: 'ऑनलाइन', search_label: 'खोजें',
   salary_fixed: 'निश्चित', search_placeholder_main: 'नौकरी, भूमिका, रेस्तराँ खोजें…',
+  jd_salary: 'सैलरी', jd_per_month: 'प्रति माह', jd_requirements: 'आवश्यकताएँ',
+  jd_description: 'नौकरी विवरण', jd_about: 'के बारे में',
+  jd_apply_now: 'अभी अप्लाई करें', jd_already_applied: 'पहले से अप्लाई',
+  jd_apply_modal_title: 'अप्लाई करें', jd_add_message: 'छोटा संदेश जोड़ें (वैकल्पिक)',
+  jd_message_placeholder: 'बताएँ आप क्यों सही हैं…',
+  jd_submit_application: 'अर्जी भेजें',
+  jd_shared_note: 'आपकी प्रोफाइल रेस्तराँ के साथ शेयर की जाएगी।',
+  jd_loading: 'लोड हो रहा है…', jd_not_found: 'नौकरी नहीं मिली',
+  jd_not_found_sub: 'यह नौकरी बंद या हटा दी गई है।', jd_back: 'वापस',
 };
 
 // Tamil, Telugu, Kannada, Malayalam share English fallback for less-visible strings
@@ -362,6 +385,15 @@ const ta: Dict = { ...en,
   time_days_ago: 'நாட்கள் முன்', time_week_ago: '1 வாரம் முன்', time_weeks_ago: 'வாரம் முன்', time_yesterday: 'நேற்று',
   applied_prefix: 'அப்ளை', online_status: 'ஆன்லைன்', search_label: 'தேடு',
   salary_fixed: 'நிலையான', search_placeholder_main: 'வேலை, பணி, ரெஸ்டாரன்ட் தேடு…',
+  jd_salary: 'சம்பளம்', jd_per_month: 'மாதத்திற்கு', jd_requirements: 'தேவைகள்',
+  jd_description: 'வேலை விவரம்', jd_about: 'பற்றி',
+  jd_apply_now: 'இப்போது அப்ளை', jd_already_applied: 'ஏற்கனவே அப்ளை',
+  jd_apply_modal_title: 'அப்ளை', jd_add_message: 'குறுகிய செய்தி (விருப்பம்)',
+  jd_message_placeholder: 'நீங்கள் ஏன் பொருத்தமானவர் என்று சொல்லுங்கள்…',
+  jd_submit_application: 'விண்ணப்பம் அனுப்பு',
+  jd_shared_note: 'உங்கள் புரொபைல் ரெஸ்டாரன்டுடன் பகிரப்படும்.',
+  jd_loading: 'ஏற்றுகிறது…', jd_not_found: 'வேலை கிடைக்கவில்லை',
+  jd_not_found_sub: 'இந்த வேலை மூடப்பட்டிருக்கலாம்.', jd_back: 'பின் செல்',
 };
 
 const te: Dict = { ...en,
@@ -451,6 +483,15 @@ const te: Dict = { ...en,
   time_days_ago: 'రోజుల క్రితం', time_week_ago: '1 వారం క్రితం', time_weeks_ago: 'వారాల క్రితం', time_yesterday: 'నిన్న',
   applied_prefix: 'దరఖాస్తు', online_status: 'ఆన్‌లైన్', search_label: 'వెతకండి',
   salary_fixed: 'స్థిర', search_placeholder_main: 'ఉద్యోగం, పాత్ర, రెస్టారెంట్ వెతకండి…',
+  jd_salary: 'జీతం', jd_per_month: 'నెలకు', jd_requirements: 'అవసరాలు',
+  jd_description: 'ఉద్యోగ వివరణ', jd_about: 'గురించి',
+  jd_apply_now: 'ఇప్పుడే దరఖాస్తు', jd_already_applied: 'ఇప్పటికే దరఖాస్తు',
+  jd_apply_modal_title: 'దరఖాస్తు', jd_add_message: 'చిన్న సందేశం (ఐచ్ఛికం)',
+  jd_message_placeholder: 'మీరు ఎందుకు సరైనవారో చెప్పండి…',
+  jd_submit_application: 'దరఖాస్తు సమర్పించు',
+  jd_shared_note: 'మీ ప్రొఫైల్ రెస్టారెంట్‌తో షేర్ చేయబడుతుంది.',
+  jd_loading: 'లోడ్ అవుతోంది…', jd_not_found: 'ఉద్యోగం దొరకలేదు',
+  jd_not_found_sub: 'ఈ ఉద్యోగం మూసివేయబడి ఉండవచ్చు.', jd_back: 'వెనుకకు',
 };
 
 const kn: Dict = { ...en,
@@ -540,6 +581,15 @@ const kn: Dict = { ...en,
   time_days_ago: 'ದಿನಗಳ ಹಿಂದೆ', time_week_ago: '1 ವಾರ ಹಿಂದೆ', time_weeks_ago: 'ವಾರಗಳ ಹಿಂದೆ', time_yesterday: 'ನಿನ್ನೆ',
   applied_prefix: 'ಅರ್ಜಿ ಸಲ್ಲಿಸಲಾಗಿದೆ', online_status: 'ಆನ್‌ಲೈನ್', search_label: 'ಹುಡುಕಿ',
   salary_fixed: 'ನಿಶ್ಚಿತ', search_placeholder_main: 'ಕೆಲಸ, ಪಾತ್ರ, ರೆಸ್ಟೋರೆಂಟ್ ಹುಡುಕಿ…',
+  jd_salary: 'ಸಂಬಳ', jd_per_month: 'ತಿಂಗಳಿಗೆ', jd_requirements: 'ಅಗತ್ಯತೆಗಳು',
+  jd_description: 'ಕೆಲಸದ ವಿವರ', jd_about: 'ಬಗ್ಗೆ',
+  jd_apply_now: 'ಈಗ ಅರ್ಜಿ', jd_already_applied: 'ಈಗಾಗಲೇ ಅರ್ಜಿ ಸಲ್ಲಿಸಲಾಗಿದೆ',
+  jd_apply_modal_title: 'ಅರ್ಜಿ', jd_add_message: 'ಚಿಕ್ಕ ಸಂದೇಶ (ಐಚ್ಛಿಕ)',
+  jd_message_placeholder: 'ನೀವು ಯಾಕೆ ಸೂಕ್ತ ಎಂದು ಹೇಳಿ…',
+  jd_submit_application: 'ಅರ್ಜಿ ಸಲ್ಲಿಸಿ',
+  jd_shared_note: 'ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ರೆಸ್ಟೋರೆಂಟ್ ಜೊತೆ ಹಂಚಿಕೊಳ್ಳಲಾಗುತ್ತದೆ.',
+  jd_loading: 'ಲೋಡ್ ಆಗುತ್ತಿದೆ…', jd_not_found: 'ಕೆಲಸ ಕಾಣಿಸಲಿಲ್ಲ',
+  jd_not_found_sub: 'ಈ ಕೆಲಸ ಮುಚ್ಚಲ್ಪಟ್ಟಿರಬಹುದು.', jd_back: 'ಹಿಂದೆ',
 };
 
 const ml: Dict = { ...en,
@@ -629,6 +679,15 @@ const ml: Dict = { ...en,
   time_days_ago: 'ദിവസം മുൻപ്', time_week_ago: '1 ആഴ്ച മുൻപ്', time_weeks_ago: 'ആഴ്ച മുൻപ്', time_yesterday: 'ഇന്നലെ',
   applied_prefix: 'അപേക്ഷിച്ചു', online_status: 'ഓൺലൈൻ', search_label: 'തിരയുക',
   salary_fixed: 'സ്ഥിരം', search_placeholder_main: 'ജോലി, റോൾ, റെസ്റ്റോറന്റ് തിരയുക…',
+  jd_salary: 'ശമ്പളം', jd_per_month: 'ഒരു മാസം', jd_requirements: 'ആവശ്യകതകൾ',
+  jd_description: 'ജോലി വിവരണം', jd_about: 'കുറിച്ച്',
+  jd_apply_now: 'ഇപ്പോൾ അപേക്ഷിക്കുക', jd_already_applied: 'ഇതിനകം അപേക്ഷിച്ചു',
+  jd_apply_modal_title: 'അപേക്ഷ', jd_add_message: 'ചെറിയ സന്ദേശം (ഐച്ഛികം)',
+  jd_message_placeholder: 'നിങ്ങൾ എന്തുകൊണ്ട് അനുയോജ്യനാണെന്ന് പറയൂ…',
+  jd_submit_application: 'അപേക്ഷ സമർപ്പിക്കുക',
+  jd_shared_note: 'നിങ്ങളുടെ പ്രൊഫൈൽ റെസ്റ്റോറന്റുമായി പങ്കിടും.',
+  jd_loading: 'ലോഡ് ചെയ്യുന്നു…', jd_not_found: 'ജോലി കണ്ടെത്തിയില്ല',
+  jd_not_found_sub: 'ഈ ജോലി അടച്ചിരിക്കാം.', jd_back: 'തിരികെ',
 };
 
 export const TRANSLATIONS: Record<LangCode, Dict> = { en, hi, ta, te, kn, ml };

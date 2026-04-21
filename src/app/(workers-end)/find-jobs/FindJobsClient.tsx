@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkerI18n } from '@/contexts/WorkerI18nContext';
@@ -209,7 +210,7 @@ export function FindJobsClient() {
             const isSaved = saved.has(j.id);
             const isApplied = applied.has(j.id);
             return (
-              <div key={j.id} className="job-card">
+              <Link key={j.id} href={`/jobs/${j.id}`} className="job-card" style={{ textDecoration: 'none', color: 'inherit' }}>
                 <div className="job-thumb">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={j.restaurant_cover || PLACEHOLDER_IMG} alt={j.restaurant_name ?? j.title} />
@@ -223,7 +224,11 @@ export function FindJobsClient() {
                   <button
                     type="button"
                     className={`save-btn${isSaved ? ' saved' : ''}`}
-                    onClick={() => toggleSave(j.id)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleSave(j.id);
+                    }}
                     aria-label={isSaved ? 'Unsave' : 'Save'}
                   >
                     <svg viewBox="0 0 24 24" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
@@ -252,14 +257,18 @@ export function FindJobsClient() {
                     <button
                       type="button"
                       className={`apply-btn${isApplied ? ' applied' : ''}`}
-                      onClick={() => apply(j)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        apply(j);
+                      }}
                       disabled={isApplied}
                     >
                       {isApplied ? t('btn_applied') : t('btn_apply')}
                     </button>
                   </div>
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>

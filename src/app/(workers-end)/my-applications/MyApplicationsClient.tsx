@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkerI18n } from '@/contexts/WorkerI18nContext';
@@ -237,7 +238,7 @@ export function MyApplicationsClient() {
           {visible.map((a) => {
             const salary = formatSalary(a.salary_min, a.salary_max);
             return (
-              <div key={a.id} className="job-card">
+              <Link key={a.id} href={a.job_id ? `/jobs/${a.job_id}` : '#'} className="job-card" style={{ textDecoration: 'none', color: 'inherit' }}>
                 <div className="job-thumb">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={a.restaurant_cover || PLACEHOLDER_IMG} alt={a.restaurant_name ?? 'Restaurant'} />
@@ -272,7 +273,7 @@ export function MyApplicationsClient() {
                     <span className={`status-chip ${STAGE_CLASS[a.stage]}`}>{t(STAGE_LABEL_KEY[a.stage])}</span>
                   </div>
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>

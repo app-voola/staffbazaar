@@ -488,7 +488,7 @@ export function WorkerDashboardClient() {
                 {jobs.map((j) => {
                   const isApplied = applied.has(j.id);
                   return (
-                    <div key={j.id} className="job-card">
+                    <Link key={j.id} href={`/jobs/${j.id}`} className="job-card" style={{ textDecoration: 'none', color: 'inherit' }}>
                       <div className="job-thumb">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={j.restaurant_cover || PLACEHOLDER_IMG} alt={j.restaurant_name ?? j.title} />
@@ -533,7 +533,7 @@ export function WorkerDashboardClient() {
                           <button
                             type="button"
                             className={`apply-chip${isApplied ? ' applied' : ''}`}
-                            onClick={() => apply(j)}
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); apply(j); }}
                             disabled={isApplied}
                           >
                             {isApplied ? (
@@ -549,7 +549,7 @@ export function WorkerDashboardClient() {
                           </button>
                         </div>
                       </div>
-                    </div>
+                    </Link>
                   );
                 })}
               </div>
