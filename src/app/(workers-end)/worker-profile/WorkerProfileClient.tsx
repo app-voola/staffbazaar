@@ -965,8 +965,8 @@ export function WorkerProfileClient() {
         .current-role .role-change { font-size: 12px; color: var(--ember); font-weight: 600; margin-left: auto; }
         .role-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; margin-top: 8px; }
         .role-option { padding: 12px 14px; border-radius: var(--radius-md); background: white; border: 1.5px solid var(--sand); font-size: 14px; font-weight: 600; color: var(--charcoal-mid); cursor: pointer; text-align: center; font-family: var(--font-body); transition: all 0.2s; }
-        .role-option:hover { border-color: var(--ember); color: var(--ember); }
-        .role-option.selected { background: var(--ember-glow); border-color: var(--ember); color: var(--ember); }
+        .role-option:hover { border-color: var(--charcoal); color: var(--charcoal); }
+        .role-option.selected { background: var(--charcoal); border-color: var(--charcoal); color: white; }
 
         .chip-selector { display: flex; flex-wrap: wrap; gap: 8px; }
         .chip-option { padding: 8px 14px; border-radius: 100px; background: white; border: 1.5px solid var(--sand); color: var(--charcoal-light); font-size: 13px; font-weight: 600; font-family: var(--font-body); cursor: pointer; transition: all 0.2s; }
