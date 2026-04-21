@@ -151,6 +151,7 @@ export function WorkerProfileClient() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState('');
+  const [rolePickerOpen, setRolePickerOpen] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -522,18 +523,32 @@ export function WorkerProfileClient() {
               </div>
 
               <div className="section-title">{t('field_role')}</div>
-              <div className="role-grid">
-                {ROLES.map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    className={`role-option${form.role === r ? ' selected' : ''}`}
-                    onClick={() => update({ role: r })}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
+              <button
+                type="button"
+                className="current-role"
+                onClick={() => setRolePickerOpen((v) => !v)}
+              >
+                <span className="role-icon">👨‍🍳</span>
+                <span className="role-label">{form.role}</span>
+                <span className="role-change">{rolePickerOpen ? 'Close' : 'Change'}</span>
+              </button>
+              {rolePickerOpen && (
+                <div className="role-grid">
+                  {ROLES.map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      className={`role-option${form.role === r ? ' selected' : ''}`}
+                      onClick={() => {
+                        update({ role: r });
+                        setRolePickerOpen(false);
+                      }}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              )}
             </section>
           )}
 
@@ -943,7 +958,12 @@ export function WorkerProfileClient() {
         .photo-label { background: none; border: none; font-family: var(--font-body); font-size: 13px; color: var(--ember); font-weight: 600; cursor: pointer; padding: 4px 8px; }
         .photo-label:hover { text-decoration: underline; }
 
-        .role-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+        .current-role { display: flex; align-items: center; gap: 14px; width: 100%; background: var(--ember-glow); border: 2px solid var(--ember); border-radius: var(--radius-md); padding: 16px; margin-bottom: 12px; cursor: pointer; font-family: var(--font-body); text-align: left; transition: all 0.2s; }
+        .current-role:hover { background: rgba(220,74,26,0.08); }
+        .current-role .role-icon { font-size: 28px; }
+        .current-role .role-label { font-weight: 700; font-size: 15px; color: var(--charcoal); }
+        .current-role .role-change { font-size: 12px; color: var(--ember); font-weight: 600; margin-left: auto; }
+        .role-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; margin-top: 8px; }
         .role-option { padding: 12px 14px; border-radius: var(--radius-md); background: white; border: 1.5px solid var(--sand); font-size: 14px; font-weight: 600; color: var(--charcoal-mid); cursor: pointer; text-align: center; font-family: var(--font-body); transition: all 0.2s; }
         .role-option:hover { border-color: var(--ember); color: var(--ember); }
         .role-option.selected { background: var(--ember-glow); border-color: var(--ember); color: var(--ember); }
