@@ -19,6 +19,7 @@ interface StartChatInput {
   role?: string;
   avatar?: string;
   initials?: string;
+  workerId?: string | null;
 }
 
 interface MessagesContextValue {
@@ -253,11 +254,17 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
     async (input) => {
       if (!user) throw new Error('Not signed in');
 
-      const existing = conversations.find((c) => c.id === input.id);
+      // If the applicant has a worker_id, use the same deterministic id
+      // that the worker's apply helper uses so both sides share ONE thread.
+      const convId = input.workerId
+        ? `conv-${input.workerId}-${user.id}`
+        : input.id;
+
+      const existing = conversations.find((c) => c.id === convId);
       if (existing) return existing.id;
 
       const newConv: MockConversation = {
-        id: input.id,
+        id: convId,
         name: input.name,
         role: input.role ?? '',
         avatar: input.avatar,
@@ -271,18 +278,22 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
 
       setConversations((prev) => [newConv, ...prev]);
 
-      const { error } = await supabase.from('conversations').insert({
-        id: newConv.id,
-        owner_id: user.id,
-        name: newConv.name,
-        role: newConv.role,
-        avatar: newConv.avatar ?? null,
-        initials: newConv.initials,
-        type: 'active',
-        last_message: '',
-        time: 'Just now',
-        unread: 0,
-      });
+      const { error } = await supabase.from('conversations').upsert(
+        {
+          id: newConv.id,
+          owner_id: user.id,
+          worker_id: input.workerId ?? null,
+          name: newConv.name,
+          role: newConv.role,
+          avatar: newConv.avatar ?? null,
+          initials: newConv.initials,
+          type: 'active',
+          last_message: '',
+          time: 'Just now',
+          unread: 0,
+        },
+        { onConflict: 'id' },
+      );
 
       if (error) {
         console.error('[conversations] startChat failed', error);

@@ -47,6 +47,7 @@ export default function MessagesPage() {
         role: applicant.role,
         avatar: applicant.avatar,
         initials: applicant.initials,
+        workerId: applicant.workerId,
       });
       setSearch('');
       setActiveId(convId);

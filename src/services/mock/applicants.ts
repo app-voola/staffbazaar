@@ -3,6 +3,7 @@ export type ApplicantStage = 'applied' | 'shortlisted' | 'called' | 'hired';
 export interface MockApplicant {
   id: string;
   jobId: string;
+  workerId?: string | null;
   name: string;
   role: string;
   experience: number;

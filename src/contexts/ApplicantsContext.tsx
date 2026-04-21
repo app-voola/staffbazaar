@@ -29,6 +29,7 @@ const ApplicantsContext = createContext<ApplicantsContextValue | undefined>(unde
 type ApplicantRow = {
   id: string;
   job_id: string;
+  worker_id: string | null;
   name: string;
   role: string | null;
   experience: number | null;
@@ -44,6 +45,7 @@ function rowToApplicant(r: ApplicantRow): MockApplicant {
   return {
     id: r.id,
     jobId: r.job_id,
+    workerId: r.worker_id,
     name: r.name,
     role: r.role ?? '',
     experience: r.experience ?? 0,

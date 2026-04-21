@@ -34,6 +34,7 @@ export function KanbanCard({
         role: applicant.role,
         avatar: applicant.avatar,
         initials: applicant.initials,
+        workerId: applicant.workerId,
       });
       router.push('/messages');
     } catch (err) {
