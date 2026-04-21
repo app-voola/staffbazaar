@@ -1158,7 +1158,7 @@ export function WorkerProfileClient() {
         @media (max-width: 768px) { .aadhaar-benefits { grid-template-columns: 1fr; } }
 
         .work-top-grid { display: grid; gap: 24px; align-items: start; margin-bottom: 8px; }
-        .salary-display .amount { font-family: var(--font-display); font-size: 26px; color: var(--ember); margin-bottom: 12px; }
+        .salary-display .amount { font-family: var(--font-display); font-size: 26px; color: var(--charcoal); margin-bottom: 12px; }
         .salary-display .amount small { font-size: 13px; color: var(--charcoal-light); }
         .salary-range { width: 100%; accent-color: var(--ember); }
         .salary-labels { display: flex; justify-content: space-between; font-size: 12px; color: var(--charcoal-light); margin-top: 6px; }
