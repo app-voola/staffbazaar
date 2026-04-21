@@ -518,13 +518,13 @@ export function WorkerDashboardClient() {
                           </svg>
                           {j.role}
                         </div>
-                        <div className="job-card-title">{j.restaurant_name ?? j.title}</div>
+                        <div className="job-card-title">{j.restaurant_name || j.title || 'Restaurant'}</div>
                         <div className="job-card-rest">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
                             <circle cx="12" cy="10" r="3" />
                           </svg>
-                          {j.restaurant_city ?? ''}
+                          {j.restaurant_city || '—'}
                         </div>
                         <div className="job-card-salary">
                           {formatSalary(j.salary_min, j.salary_max)}

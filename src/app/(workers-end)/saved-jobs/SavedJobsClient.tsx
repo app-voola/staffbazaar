@@ -192,16 +192,14 @@ export function SavedJobsClient() {
                 </div>
                 <div className="job-card-info">
                   <div className="job-card-head">
-                    <h3 className="job-card-title">{j.restaurant_name ?? j.title}</h3>
-                    {j.restaurant_city && (
-                      <span className="job-card-rest">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                          <circle cx="12" cy="10" r="3" />
-                        </svg>
-                        {j.restaurant_city}
-                      </span>
-                    )}
+                    <h3 className="job-card-title">{j.restaurant_name || j.title || 'Restaurant'}</h3>
+                    <span className="job-card-rest">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                        <circle cx="12" cy="10" r="3" />
+                      </svg>
+                      {j.restaurant_city || '—'}
+                    </span>
                   </div>
                   <div className="job-card-salary">{formatSalary(j.salary_min, j.salary_max)}</div>
                   <div className="job-card-bottom">

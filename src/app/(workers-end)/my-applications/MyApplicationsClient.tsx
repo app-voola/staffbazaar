@@ -257,16 +257,14 @@ export function MyApplicationsClient() {
                 </div>
                 <div className="job-card-info">
                   <div className="job-card-head">
-                    <h3 className="job-card-title">{a.restaurant_name ?? a.job_title ?? 'Restaurant'}</h3>
-                    {a.restaurant_city && (
-                      <span className="job-card-rest">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                          <circle cx="12" cy="10" r="3" />
-                        </svg>
-                        {a.restaurant_city}
-                      </span>
-                    )}
+                    <h3 className="job-card-title">{a.restaurant_name || a.job_title || 'Restaurant'}</h3>
+                    <span className="job-card-rest">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                        <circle cx="12" cy="10" r="3" />
+                      </svg>
+                      {a.restaurant_city || '—'}
+                    </span>
                   </div>
                   {salary && <div className="job-card-salary">{salary}</div>}
                   <div className="job-card-bottom">
