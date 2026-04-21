@@ -970,8 +970,9 @@ export function WorkerProfileClient() {
 
         .chip-selector { display: flex; flex-wrap: wrap; gap: 8px; }
         .chip-option { padding: 8px 14px; border-radius: 100px; background: white; border: 1.5px solid var(--sand); color: var(--charcoal-light); font-size: 13px; font-weight: 600; font-family: var(--font-body); cursor: pointer; transition: all 0.2s; }
-        .chip-option:hover { border-color: var(--ember); color: var(--ember); }
-        .chip-option.selected { background: var(--ember-glow); border-color: var(--ember); color: var(--ember); }
+        .chip-option:hover { border-color: var(--charcoal); color: var(--charcoal); }
+        .chip-option.selected { background: var(--charcoal); border-color: var(--charcoal); color: white; }
+        .chip-option.selected:hover { background: #000; border-color: #000; color: white; }
 
         .sb-verify-card { background: linear-gradient(135deg, #FFF7ED, var(--cream)); border: 1.5px solid var(--ember-glow); border-radius: var(--radius-md); padding: 10px 12px; margin-bottom: 16px; }
         .verify-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: white; border-radius: var(--radius-md); border: 1px solid var(--sand); }
