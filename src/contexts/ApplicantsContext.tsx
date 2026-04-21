@@ -156,6 +156,7 @@ export function ApplicantsProvider({ children }: { children: ReactNode }) {
 
   const moveTo = useCallback<ApplicantsContextValue['moveTo']>(async (id, stage) => {
     const snapshot = applicants;
+    const target = applicants.find((a) => a.id === id);
     setApplicants((prev) => prev.map((a) => (a.id === id ? { ...a, stage } : a)));
 
     const { error } = await supabase.from('applicants').update({ stage }).eq('id', id);
@@ -163,6 +164,26 @@ export function ApplicantsProvider({ children }: { children: ReactNode }) {
       console.error('[applicants] moveTo failed', error);
       setApplicants(snapshot);
       throw error;
+    }
+
+    // Notify the worker of the stage change (if we know who they are)
+    if (target?.workerId) {
+      const titleByStage: Record<ApplicantStage, { title: string; body: string; type: string }> = {
+        applied: { title: 'Application received', body: `Your application for ${target.role} has been received.`, type: 'application' },
+        shortlisted: { title: "You've been shortlisted", body: `Your application for ${target.role} has been shortlisted. Expect a call soon.`, type: 'shortlist' },
+        called: { title: 'Interview invitation', body: `You've been called for the ${target.role} role.`, type: 'shortlist' },
+        hired: { title: "Congratulations! You've been hired", body: `You've been hired for the ${target.role} role.`, type: 'hired' },
+      };
+      const meta = titleByStage[stage];
+      if (meta) {
+        await supabase.from('notifications').insert({
+          user_id: target.workerId,
+          type: meta.type,
+          title: meta.title,
+          body: meta.body,
+          link: '/my-applications',
+        });
+      }
     }
   }, [applicants]);
 

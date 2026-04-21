@@ -227,7 +227,7 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
     // Increment unread so the recipient's sidebar badge lights up
     const { data: convRow } = await supabase
       .from('conversations')
-      .select('unread')
+      .select('unread, worker_id, name')
       .eq('id', convId)
       .maybeSingle();
     const nextUnread = (convRow?.unread ?? 0) + 1;
@@ -242,6 +242,17 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
       })
       .eq('id', convId);
     if (convErr) console.error('[conversations] update failed', convErr);
+
+    // Notify the worker of the new message
+    if (convRow?.worker_id) {
+      await supabase.from('notifications').insert({
+        user_id: convRow.worker_id,
+        type: 'message',
+        title: `New message from ${convRow.name ?? 'Restaurant'}`,
+        body: text.length > 120 ? `${text.slice(0, 120)}…` : text,
+        link: '/worker-messages',
+      });
+    }
   }, []);
 
   const markRead = useCallback<MessagesContextValue['markRead']>(async (convId) => {

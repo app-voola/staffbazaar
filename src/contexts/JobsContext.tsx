@@ -210,6 +210,24 @@ export function JobsProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      // If job is active, notify all workers who are currently looking for work
+      if (created.status === 'active') {
+        const { data: workers } = await supabase
+          .from('worker_profiles')
+          .select('worker_id')
+          .eq('looking_for_work', true);
+        const rows = (workers ?? []).map((w: { worker_id: string }) => ({
+          user_id: w.worker_id,
+          type: 'job_match',
+          title: 'New job matching your profile',
+          body: `${created.title} — ${created.role}. Check it out!`,
+          link: `/jobs/${created.id}`,
+        }));
+        if (rows.length > 0) {
+          await supabase.from('notifications').insert(rows);
+        }
+      }
+
       return created;
     },
     [postsUsed, user],
