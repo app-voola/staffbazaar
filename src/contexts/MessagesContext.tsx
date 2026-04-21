@@ -91,10 +91,20 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     (async () => {
-      const [{ data: convRows, error: cErr }, { data: msgRows, error: mErr }] = await Promise.all([
-        supabase.from('conversations').select('*').order('updated_at', { ascending: false }),
-        supabase.from('messages').select('*').order('created_at', { ascending: true }),
-      ]);
+      const { data: convRows, error: cErr } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('owner_id', user.id)
+        .order('updated_at', { ascending: false });
+
+      const convIds = (convRows ?? []).map((c: { id: string }) => c.id);
+      const { data: msgRows, error: mErr } = convIds.length
+        ? await supabase
+            .from('messages')
+            .select('*')
+            .in('conversation_id', convIds)
+            .order('created_at', { ascending: true })
+        : { data: [], error: null as unknown as typeof cErr };
 
       if (cancelled) return;
 
@@ -117,10 +127,10 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
     })();
 
     const convChannel = supabase
-      .channel('conversations-changes')
+      .channel(`conversations-owner-${user.id}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'conversations' },
+        { event: '*', schema: 'public', table: 'conversations', filter: `owner_id=eq.${user.id}` },
         (payload) => {
           if (payload.eventType === 'INSERT') {
             const row = payload.new as ConversationRow;

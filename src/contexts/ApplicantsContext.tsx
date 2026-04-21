@@ -70,10 +70,26 @@ export function ApplicantsProvider({ children }: { children: ReactNode }) {
 
     let cancelled = false;
 
-    (async () => {
+    let ownerJobIds: Set<string> = new Set();
+
+    const loadAll = async () => {
+      const { data: jobs } = await supabase
+        .from('jobs')
+        .select('id')
+        .eq('owner_id', user.id);
+      ownerJobIds = new Set((jobs ?? []).map((j: { id: string }) => j.id));
+      if (cancelled) return;
+
+      if (ownerJobIds.size === 0) {
+        setApplicants([]);
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('applicants')
         .select('*')
+        .in('job_id', Array.from(ownerJobIds))
         .order('created_at', { ascending: true });
 
       if (cancelled) return;
@@ -82,26 +98,39 @@ export function ApplicantsProvider({ children }: { children: ReactNode }) {
       else if (data) setApplicants((data as ApplicantRow[]).map(rowToApplicant));
 
       setLoading(false);
-    })();
+    };
+
+    loadAll();
 
     const channel = supabase
-      .channel('applicants-changes')
+      .channel(`applicants-owner-${user.id}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'applicants' },
         (payload) => {
+          const row = (payload.new || payload.old) as ApplicantRow & { job_id: string };
+          if (!row.job_id || !ownerJobIds.has(row.job_id)) return;
+
           if (payload.eventType === 'INSERT') {
-            const row = payload.new as ApplicantRow;
+            const r = payload.new as ApplicantRow;
             setApplicants((prev) =>
-              prev.some((a) => a.id === row.id) ? prev : [...prev, rowToApplicant(row)],
+              prev.some((a) => a.id === r.id) ? prev : [...prev, rowToApplicant(r)],
             );
           } else if (payload.eventType === 'UPDATE') {
-            const row = payload.new as ApplicantRow;
-            setApplicants((prev) => prev.map((a) => (a.id === row.id ? rowToApplicant(row) : a)));
+            const r = payload.new as ApplicantRow;
+            setApplicants((prev) => prev.map((a) => (a.id === r.id ? rowToApplicant(r) : a)));
           } else if (payload.eventType === 'DELETE') {
             const old = payload.old as { id: string };
             setApplicants((prev) => prev.filter((a) => a.id !== old.id));
           }
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'jobs', filter: `owner_id=eq.${user.id}` },
+        () => {
+          // When owner's job list changes, re-derive the allowed set and reload
+          loadAll();
         },
       )
       .subscribe();

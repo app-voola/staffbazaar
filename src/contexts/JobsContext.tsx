@@ -105,7 +105,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
     (async () => {
       const [{ data: jobRows, error: jobErr }, { data: settings, error: setErr }] =
         await Promise.all([
-          supabase.from('jobs').select('*').order('created_at', { ascending: false }),
+          supabase.from('jobs').select('*').eq('owner_id', user.id).order('created_at', { ascending: false }),
           supabase
             .from('app_settings')
             .select('posts_used, posts_limit')
@@ -136,10 +136,10 @@ export function JobsProvider({ children }: { children: ReactNode }) {
     })();
 
     const jobsChannel = supabase
-      .channel('jobs-changes')
+      .channel(`jobs-owner-${user.id}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'jobs' },
+        { event: '*', schema: 'public', table: 'jobs', filter: `owner_id=eq.${user.id}` },
         (payload) => {
           if (payload.eventType === 'INSERT') {
             const row = payload.new as JobRow;
