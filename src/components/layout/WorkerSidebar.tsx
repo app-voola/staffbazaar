@@ -2,10 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkerI18n } from '@/contexts/WorkerI18nContext';
 import { LanguagePicker } from '@/components/worker/LanguagePicker';
 import { WorkStatusCard } from '@/components/worker/WorkStatusCard';
+import { supabase } from '@/lib/supabase';
 import type { TranslationKey } from '@/lib/worker-translations';
 
 const DashboardIcon = (
@@ -77,8 +79,51 @@ const accountItems: NavItem[] = [
 
 export function WorkerSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const { t } = useWorkerI18n();
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [savedCount, setSavedCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) {
+      setUnreadMessages(0);
+      setUnreadNotifs(0);
+      setSavedCount(0);
+      return;
+    }
+    let cancelled = false;
+
+    const load = async () => {
+      const [convs, notifs, saved] = await Promise.all([
+        supabase.from('conversations').select('unread').eq('worker_id', user.id),
+        supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('read', false),
+        supabase.from('saved_jobs').select('job_id', { count: 'exact', head: true }).eq('worker_id', user.id),
+      ]);
+      if (cancelled) return;
+      const msgTotal = (convs.data ?? []).reduce(
+        (sum: number, c: { unread?: number }) => sum + (c.unread ?? 0),
+        0,
+      );
+      setUnreadMessages(msgTotal);
+      setUnreadNotifs(notifs.count ?? 0);
+      setSavedCount(saved.count ?? 0);
+    };
+
+    load();
+
+    const ch = supabase
+      .channel(`worker-sidebar-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations', filter: `worker_id=eq.${user.id}` }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'saved_jobs', filter: `worker_id=eq.${user.id}` }, () => load())
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(ch);
+    };
+  }, [user?.id]);
 
   const handleLogout = async () => {
     onNavigate?.();
@@ -88,6 +133,13 @@ export function WorkerSidebar({ onNavigate }: { onNavigate?: () => void }) {
   };
 
   const isActive = (href: string) => pathname?.startsWith(href);
+
+  const badgeFor = (key: TranslationKey): number => {
+    if (key === 'nav_messages') return unreadMessages;
+    if (key === 'nav_notifications') return unreadNotifs;
+    if (key === 'nav_saved') return savedCount;
+    return 0;
+  };
 
   return (
     <nav className="sidebar-nav" id="sidebarNav">
@@ -101,30 +153,38 @@ export function WorkerSidebar({ onNavigate }: { onNavigate?: () => void }) {
       </Link>
 
       <div className="sidebar-nav-section">{t('nav_main')}</div>
-      {mainItems.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          className={`sidebar-nav-item${isActive(item.href) ? ' active' : ''}`}
-          onClick={onNavigate}
-        >
-          {item.icon}
-          <span>{t(item.labelKey)}</span>
-        </Link>
-      ))}
+      {mainItems.map((item) => {
+        const badge = badgeFor(item.labelKey);
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`sidebar-nav-item${isActive(item.href) ? ' active' : ''}`}
+            onClick={onNavigate}
+          >
+            {item.icon}
+            <span>{t(item.labelKey)}</span>
+            {badge > 0 && <span className="sidebar-badge">{badge}</span>}
+          </Link>
+        );
+      })}
 
       <div className="sidebar-nav-section">{t('nav_account')}</div>
-      {accountItems.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          className={`sidebar-nav-item${isActive(item.href) ? ' active' : ''}`}
-          onClick={onNavigate}
-        >
-          {item.icon}
-          <span>{t(item.labelKey)}</span>
-        </Link>
-      ))}
+      {accountItems.map((item) => {
+        const badge = badgeFor(item.labelKey);
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`sidebar-nav-item${isActive(item.href) ? ' active' : ''}`}
+            onClick={onNavigate}
+          >
+            {item.icon}
+            <span>{t(item.labelKey)}</span>
+            {badge > 0 && <span className="sidebar-badge">{badge}</span>}
+          </Link>
+        );
+      })}
 
       <LanguagePicker />
       <WorkStatusCard />
