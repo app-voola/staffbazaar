@@ -152,7 +152,14 @@ export function WorkerProfileClient() {
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState('');
   const [rolePickerOpen, setRolePickerOpen] = useState(false);
+  const [aadhaarModalOpen, setAadhaarModalOpen] = useState(false);
+  const [aadhaarPreview, setAadhaarPreview] = useState<string | null>(null);
+  const [aadhaarFile, setAadhaarFile] = useState<File | null>(null);
+  const [aadhaarError, setAadhaarError] = useState('');
+  const [aadhaarSubmitting, setAadhaarSubmitting] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const aadhaarCameraRef = useRef<HTMLInputElement>(null);
+  const aadhaarGalleryRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -371,13 +378,65 @@ export function WorkerProfileClient() {
     setTimeout(() => setToast(''), 1500);
   };
 
-  const markAadhaarUploaded = async () => {
-    update({ aadhaar_status: 'uploaded' });
-    if (user) {
-      await supabase
-        .from('worker_profiles')
-        .upsert({ worker_id: user.id, aadhaar_status: 'uploaded' }, { onConflict: 'worker_id' });
+  const openAadhaarModal = () => {
+    setAadhaarModalOpen(true);
+    setAadhaarFile(null);
+    setAadhaarPreview(null);
+    setAadhaarError('');
+  };
+
+  const handleAadhaarPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setAadhaarError('Please pick an image file.');
+      return;
     }
+    if (file.size > 6 * 1024 * 1024) {
+      setAadhaarError('Image too large. Please use a photo under 6 MB.');
+      return;
+    }
+    setAadhaarError('');
+    setAadhaarFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setAadhaarPreview((ev.target?.result as string) ?? null);
+    reader.readAsDataURL(file);
+  };
+
+  const submitAadhaar = async () => {
+    if (!user || !aadhaarFile) return;
+    setAadhaarSubmitting(true);
+    const ext = aadhaarFile.name.split('.').pop() || 'jpg';
+    const path = `workers/${user.id}/aadhaar-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage
+      .from(PHOTO_BUCKET)
+      .upload(path, aadhaarFile, { cacheControl: '3600', upsert: false });
+    if (upErr) {
+      setAadhaarSubmitting(false);
+      setAadhaarError(`Upload failed: ${upErr.message}`);
+      return;
+    }
+    const { data: urlData } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
+    const imageUrl = urlData.publicUrl;
+
+    const { error: dbErr } = await supabase.from('worker_profiles').upsert(
+      {
+        worker_id: user.id,
+        aadhaar_status: 'uploaded',
+        aadhaar_image_url: imageUrl,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'worker_id' },
+    );
+    setAadhaarSubmitting(false);
+    if (dbErr) {
+      setAadhaarError(`Save failed: ${dbErr.message}`);
+      return;
+    }
+    update({ aadhaar_status: 'uploaded' });
+    setSaved((s) => ({ ...s, aadhaar_status: 'uploaded' }));
+    setAadhaarModalOpen(false);
     setToast('Aadhaar photo uploaded. We will review it soon.');
     setTimeout(() => setToast(''), 2500);
   };
@@ -594,7 +653,7 @@ export function WorkerProfileClient() {
                   {form.aadhaar_status === 'verified' ? (
                     <div className="vr-status">{t('aadhaar_verified')}</div>
                   ) : (
-                    <button type="button" className="vr-action" onClick={markAadhaarUploaded}>
+                    <button type="button" className="vr-action" onClick={openAadhaarModal}>
                       {form.aadhaar_status === 'uploaded' ? t('aadhaar_reupload') : t('aadhaar_upload_now')}
                     </button>
                   )}
@@ -905,6 +964,105 @@ export function WorkerProfileClient() {
         </div>
       )}
 
+      {aadhaarModalOpen && (
+        <div
+          className="aadhaar-modal-overlay open"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !aadhaarSubmitting) setAadhaarModalOpen(false);
+          }}
+        >
+          <div className="aadhaar-modal" role="dialog" aria-modal="true">
+            <h3>Upload your Aadhaar card photo</h3>
+            <p>
+              Take a clear photo of the front of your Aadhaar card, or pick one from your phone.
+              Our team will check it for you.
+            </p>
+
+            {!aadhaarPreview ? (
+              <div className="aadhaar-upload-pickers">
+                <button
+                  type="button"
+                  className="aadhaar-pick-btn"
+                  onClick={() => aadhaarCameraRef.current?.click()}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    <circle cx="12" cy="13" r="4" />
+                  </svg>
+                  Take Photo
+                  <small>Use camera</small>
+                </button>
+                <button
+                  type="button"
+                  className="aadhaar-pick-btn"
+                  onClick={() => aadhaarGalleryRef.current?.click()}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <polyline points="21 15 16 10 5 21" />
+                  </svg>
+                  From Gallery
+                  <small>Pick a photo</small>
+                </button>
+                <input
+                  ref={aadhaarCameraRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleAadhaarPick}
+                  hidden
+                />
+                <input
+                  ref={aadhaarGalleryRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAadhaarPick}
+                  hidden
+                />
+              </div>
+            ) : (
+              <div className="aadhaar-preview">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={aadhaarPreview} alt="Aadhaar preview" />
+                <button
+                  type="button"
+                  className="retake-link"
+                  onClick={() => {
+                    setAadhaarFile(null);
+                    setAadhaarPreview(null);
+                    setAadhaarError('');
+                  }}
+                >
+                  Retake / Choose another
+                </button>
+              </div>
+            )}
+
+            {aadhaarError && <div className="err-line">{aadhaarError}</div>}
+
+            <div className="aadhaar-modal-actions">
+              <button
+                type="button"
+                className="btn-cancel"
+                onClick={() => setAadhaarModalOpen(false)}
+                disabled={aadhaarSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-submit"
+                onClick={submitAadhaar}
+                disabled={!aadhaarFile || aadhaarSubmitting}
+              >
+                {aadhaarSubmitting ? 'Uploading…' : 'Submit'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         .sb-page-wrap { max-width: 1100px; padding-bottom: 80px; }
         .sb-page-head { margin-bottom: 16px; }
@@ -1046,6 +1204,31 @@ export function WorkerProfileClient() {
         .btn-save:disabled { opacity: 0.5; cursor: default; }
 
         .sb-toast { position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); background: var(--charcoal); color: white; padding: 12px 20px; border-radius: 100px; font-size: 14px; font-weight: 600; z-index: 400; box-shadow: var(--shadow-lg); }
+
+        .aadhaar-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 9998; padding: 16px; }
+        .aadhaar-modal-overlay.open { display: flex; }
+        .aadhaar-modal { background: white; border-radius: 16px; width: 100%; max-width: 460px; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+        .aadhaar-modal h3 { font-family: var(--font-display); font-size: 22px; color: var(--charcoal); margin: 0 0 6px; }
+        .aadhaar-modal p { font-size: 14px; color: var(--charcoal-light); margin: 0 0 18px; line-height: 1.5; }
+
+        .aadhaar-upload-pickers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+        .aadhaar-pick-btn { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 12px; border-radius: var(--radius-md); border: 2px dashed var(--sand); background: var(--cream); color: var(--charcoal); font-family: var(--font-body); font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; text-align: center; }
+        .aadhaar-pick-btn:hover { border-color: var(--charcoal); color: var(--charcoal); background: rgba(0,0,0,0.04); }
+        .aadhaar-pick-btn svg { width: 28px; height: 28px; }
+        .aadhaar-pick-btn small { font-size: 11px; font-weight: 500; color: var(--charcoal-light); }
+
+        .aadhaar-preview { border: 1.5px solid var(--sand); border-radius: var(--radius-md); padding: 10px; background: var(--cream); margin-bottom: 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .aadhaar-preview img { max-width: 100%; max-height: 240px; border-radius: var(--radius-sm); object-fit: contain; background: white; }
+        .retake-link { font-size: 13px; font-weight: 700; color: var(--ember); background: none; border: none; cursor: pointer; padding: 4px 8px; font-family: var(--font-body); }
+        .retake-link:hover { text-decoration: underline; }
+
+        .aadhaar-modal .err-line { font-size: 12px; color: #DC2626; margin-top: 6px; font-weight: 600; min-height: 16px; }
+        .aadhaar-modal-actions { display: flex; gap: 10px; margin-top: 12px; }
+        .aadhaar-modal-actions .btn-cancel { flex: 1; padding: 12px; background: white; border: 1.5px solid var(--sand); border-radius: var(--radius-md); font-size: 14px; font-weight: 700; color: var(--charcoal); font-family: var(--font-body); cursor: pointer; }
+        .aadhaar-modal-actions .btn-cancel:disabled { opacity: 0.5; cursor: default; }
+        .aadhaar-modal-actions .btn-submit { flex: 2; padding: 12px; background: var(--ember); border: none; border-radius: var(--radius-md); font-size: 14px; font-weight: 700; color: white; font-family: var(--font-body); cursor: pointer; }
+        .aadhaar-modal-actions .btn-submit:hover:not(:disabled) { background: #C7421A; }
+        .aadhaar-modal-actions .btn-submit:disabled { background: var(--sand); color: var(--stone); cursor: not-allowed; }
       `}</style>
     </div>
   );
