@@ -258,42 +258,46 @@ export function WorkerMessagesClient() {
     return conversations;
   }, [conversations, filter]);
 
+  // Refs so the effect doesn't cancel itself on every cache update
+  const cacheRef = useRef<Record<string, string>>({});
+  const pendingRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    cacheRef.current = translationCache;
+  }, [translationCache]);
+  useEffect(() => {
+    pendingRef.current = translationPending;
+  }, [translationPending]);
+
   // Auto-translate all messages when the language is not English
   useEffect(() => {
     if (lang === 'en' || messages.length === 0) return;
     let cancelled = false;
 
-    const toTranslate = messages.filter((m) => {
-      if (!m.text.trim()) return false;
-      const key = `${m.id}:${lang}`;
-      return translationCache[key] === undefined && !translationPending.has(key);
-    });
-    if (toTranslate.length === 0) return;
-
-    setTranslationPending((prev) => {
-      const next = new Set(prev);
-      toTranslate.forEach((m) => next.add(`${m.id}:${lang}`));
-      return next;
-    });
-
     (async () => {
-      for (const m of toTranslate) {
+      for (const m of messages) {
+        if (cancelled) return;
+        if (!m.text.trim()) continue;
         const key = `${m.id}:${lang}`;
+        if (cacheRef.current[key] !== undefined || pendingRef.current.has(key)) continue;
+
+        pendingRef.current = new Set(pendingRef.current).add(key);
+        setTranslationPending(new Set(pendingRef.current));
+
         try {
           const translated = await translateText(m.text, lang);
           if (cancelled) return;
-          setTranslationCache((prev) => ({ ...prev, [key]: translated }));
+          cacheRef.current = { ...cacheRef.current, [key]: translated };
+          setTranslationCache({ ...cacheRef.current });
         } catch {
           if (cancelled) return;
-          setTranslationCache((prev) => ({ ...prev, [key]: m.text }));
+          cacheRef.current = { ...cacheRef.current, [key]: m.text };
+          setTranslationCache({ ...cacheRef.current });
         } finally {
-          if (!cancelled) {
-            setTranslationPending((prev) => {
-              const next = new Set(prev);
-              next.delete(key);
-              return next;
-            });
-          }
+          const next = new Set(pendingRef.current);
+          next.delete(key);
+          pendingRef.current = next;
+          if (!cancelled) setTranslationPending(next);
         }
       }
     })();
@@ -301,7 +305,7 @@ export function WorkerMessagesClient() {
     return () => {
       cancelled = true;
     };
-  }, [messages, lang, translationCache, translationPending]);
+  }, [messages, lang]);
 
   const send = async () => {
     const text = draft.trim();
