@@ -9,6 +9,7 @@ import { translateText } from '@/lib/translate-text';
 interface Conversation {
   id: string;
   name: string;
+  restaurant_name: string | null;
   role: string | null;
   avatar: string | null;
   initials: string | null;
@@ -151,13 +152,12 @@ export function WorkerMessagesClient() {
       const convId = `conv-${user.id}-${r.jobs.owner_id}`;
       const welcomeText = `Thanks for your interest in the ${r.role} role at ${name}. We will review your application and get back to you shortly.`;
       const timeStr = new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
-      // Store worker name so owner sees who applied; worker UI resolves
-      // restaurant name separately from owner_id.
       await supabase.from('conversations').insert({
         id: convId,
         worker_id: user.id,
         owner_id: r.jobs.owner_id,
         name: workerName,
+        restaurant_name: name,
         role: r.role,
         avatar: null,
         initials: workerName[0]?.toUpperCase() ?? 'W',
@@ -191,7 +191,7 @@ export function WorkerMessagesClient() {
     const [convRes, appsRes] = await Promise.all([
       supabase
         .from('conversations')
-        .select('id, name, role, avatar, initials, last_message, time, unread, updated_at, owner_id')
+        .select('id, name, restaurant_name, role, avatar, initials, last_message, time, unread, updated_at, owner_id')
         .eq('worker_id', user.id)
         .order('updated_at', { ascending: false }),
       supabase.from('applicants').select('id', { count: 'exact', head: true }).eq('worker_id', user.id),
@@ -421,7 +421,7 @@ export function WorkerMessagesClient() {
           ) : (
             filtered.map((c) => {
               const rest = c.owner_id ? restaurantByOwner[c.owner_id] : undefined;
-              const displayName = rest?.name ?? c.name;
+              const displayName = c.restaurant_name ?? rest?.name ?? 'Restaurant';
               const displayAvatar = rest?.cover_image ?? c.avatar;
               const displayInitials = (displayName?.[0] ?? 'R').toUpperCase();
               return (
@@ -478,7 +478,7 @@ export function WorkerMessagesClient() {
               </button>
               {(() => {
                 const rest = activeConv.owner_id ? restaurantByOwner[activeConv.owner_id] : undefined;
-                const displayName = rest?.name ?? activeConv.name;
+                const displayName = activeConv.restaurant_name ?? rest?.name ?? 'Restaurant';
                 const displayAvatar = rest?.cover_image ?? activeConv.avatar;
                 const displayInitials = (displayName?.[0] ?? 'R').toUpperCase();
                 return (

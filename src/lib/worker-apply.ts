@@ -49,12 +49,14 @@ export async function applyToJob(user: UserLike, job: JobLike): Promise<{ error:
   if (!existing) {
     const welcomeText = `Thanks for your interest in the ${job.role} role at ${restName}. We will review your application and get back to you shortly.`;
     // Owner views this conversation so we store the *worker's* display
-    // name here; the worker's UI derives the restaurant name from owner_id.
+    // name here; worker's view uses restaurant_name which we persist so
+    // it works even if the owner hasn't set up a restaurants row yet.
     await supabase.from('conversations').insert({
       id: convId,
       worker_id: user.id,
       owner_id: job.owner_id,
       name: workerName,
+      restaurant_name: restName,
       role: job.role,
       avatar: null,
       initials: initials(workerName),
