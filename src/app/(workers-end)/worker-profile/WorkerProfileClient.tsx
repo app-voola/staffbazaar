@@ -378,6 +378,20 @@ export function WorkerProfileClient() {
     setTimeout(() => setToast(''), 1500);
   };
 
+  const handlePhotoRemove = async () => {
+    if (!user) return;
+    await supabase
+      .from('worker_profiles')
+      .upsert(
+        { worker_id: user.id, avatar_url: null, updated_at: new Date().toISOString() },
+        { onConflict: 'worker_id' },
+      );
+    setForm((f) => ({ ...f, avatar_url: '' }));
+    setSaved((s) => ({ ...s, avatar_url: '' }));
+    setToast('Photo removed');
+    setTimeout(() => setToast(''), 1500);
+  };
+
   const openAadhaarModal = () => {
     setAadhaarModalOpen(true);
     setAadhaarFile(null);
@@ -528,13 +542,24 @@ export function WorkerProfileClient() {
                     </svg>
                   </button>
                 </div>
-                <button
-                  type="button"
-                  className="photo-label"
-                  onClick={() => photoInputRef.current?.click()}
-                >
-                  {t('change_photo')}
-                </button>
+                <div className="photo-actions">
+                  <button
+                    type="button"
+                    className="photo-label"
+                    onClick={() => photoInputRef.current?.click()}
+                  >
+                    {t('change_photo')}
+                  </button>
+                  {form.avatar_url && (
+                    <button
+                      type="button"
+                      className="photo-remove"
+                      onClick={handlePhotoRemove}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
                 <input
                   ref={photoInputRef}
                   type="file"
@@ -1113,8 +1138,11 @@ export function WorkerProfileClient() {
         .photo-edit-btn { position: absolute; bottom: 0; right: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--ember); color: white; border: 2px solid white; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
         .photo-edit-btn:hover { background: #C7421A; }
         .photo-edit-btn svg { width: 14px; height: 14px; }
+        .photo-actions { display: flex; gap: 12px; align-items: center; }
         .photo-label { background: none; border: none; font-family: var(--font-body); font-size: 13px; color: var(--ember); font-weight: 600; cursor: pointer; padding: 4px 8px; }
         .photo-label:hover { text-decoration: underline; }
+        .photo-remove { background: none; border: none; font-family: var(--font-body); font-size: 13px; color: var(--charcoal-light); font-weight: 600; cursor: pointer; padding: 4px 8px; }
+        .photo-remove:hover { color: #DC2626; text-decoration: underline; }
 
         .current-role { display: flex; align-items: center; gap: 14px; width: 100%; background: var(--ember-glow); border: 2px solid var(--ember); border-radius: var(--radius-md); padding: 16px; margin-bottom: 12px; cursor: pointer; font-family: var(--font-body); text-align: left; transition: all 0.2s; }
         .current-role:hover { background: rgba(220,74,26,0.08); }
