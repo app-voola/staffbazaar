@@ -307,31 +307,6 @@ export function WorkerProfileClient() {
   const save = async () => {
     if (!user) return;
     setBusy(true);
-    const profileRow = {
-      worker_id: user.id,
-      full_name: form.full_name,
-      role: form.role,
-      salary_expected: form.salary_expected,
-      skills: form.skills,
-      cities: form.cities,
-      phone: form.phone,
-      email: form.email,
-      bio: form.bio,
-      avatar_url: form.avatar_url || null,
-      looking_for_work: form.looking_for_work,
-      aadhaar_status: form.aadhaar_status,
-      notify_job_matches: form.notify_job_matches,
-      notify_whatsapp: form.notify_whatsapp,
-      notify_application_updates: form.notify_application_updates,
-      updated_at: new Date().toISOString(),
-    };
-    const { error: pErr } = await supabase.from('worker_profiles').upsert(profileRow, { onConflict: 'worker_id' });
-    if (pErr) {
-      setBusy(false);
-      setToast(`Save failed: ${pErr.message}`);
-      setTimeout(() => setToast(''), 2500);
-      return;
-    }
 
     // Save experience: delete old, insert current
     await supabase.from('work_experience').delete().eq('worker_id', user.id);
@@ -348,6 +323,42 @@ export function WorkerProfileClient() {
       }));
     if (rows.length > 0) {
       await supabase.from('work_experience').insert(rows);
+    }
+
+    // Derive total experience in years so the owner's candidate view can
+    // display a single number without having to aggregate rows itself.
+    const nowYear = new Date().getFullYear();
+    const totalYears = rows.reduce((sum, r) => {
+      if (!r.from_year) return sum;
+      const end = r.still_here ? nowYear : r.to_year ?? r.from_year;
+      return sum + Math.max(0, end - r.from_year);
+    }, 0);
+
+    const profileRow = {
+      worker_id: user.id,
+      full_name: form.full_name,
+      role: form.role,
+      salary_expected: form.salary_expected,
+      skills: form.skills,
+      cities: form.cities,
+      phone: form.phone,
+      email: form.email,
+      bio: form.bio,
+      avatar_url: form.avatar_url || null,
+      looking_for_work: form.looking_for_work,
+      aadhaar_status: form.aadhaar_status,
+      notify_job_matches: form.notify_job_matches,
+      notify_whatsapp: form.notify_whatsapp,
+      notify_application_updates: form.notify_application_updates,
+      experience_years: totalYears,
+      updated_at: new Date().toISOString(),
+    };
+    const { error: pErr } = await supabase.from('worker_profiles').upsert(profileRow, { onConflict: 'worker_id' });
+    if (pErr) {
+      setBusy(false);
+      setToast(`Save failed: ${pErr.message}`);
+      setTimeout(() => setToast(''), 2500);
+      return;
     }
 
     setSaved(form);
