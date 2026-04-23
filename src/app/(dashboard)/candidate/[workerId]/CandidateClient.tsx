@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { type MockWorker } from '@/services/mock/workers';
 import { useWorkers } from '@/contexts/WorkersContext';
@@ -63,52 +63,55 @@ export function CandidateClient({ workerId }: { workerId: string }) {
   const [shortlistOpen, setShortlistOpen] = useState<MockWorker | null>(null);
   const [toast, setToast] = useState('');
 
+  const loadProfile = useCallback(async () => {
+    const [{ data: p }, { data: exps }] = await Promise.all([
+      supabase.from('worker_profiles').select('*').eq('worker_id', workerId).maybeSingle(),
+      supabase
+        .from('work_experience')
+        .select('id, job_title, restaurant, location, from_year, to_year, still_here')
+        .eq('worker_id', workerId)
+        .order('from_year', { ascending: false }),
+    ]);
+
+    // If no real profile row exists (mock seed worker), fall back to default
+    if (!p) {
+      setProfile(getWorkerProfile(workerId));
+      return;
+    }
+
+    const row = p as WorkerProfileRow;
+    const expRows = (exps ?? []) as WorkExpRow[];
+
+    const detail: WorkerProfileDetail = {
+      workerId,
+      area: row.city ?? row.cities?.[0] ?? '',
+      languages: [],
+      cuisines: (row.skills ?? []).map((s) => ({ name: s, years: row.experience_years ?? 0 })),
+      experience: expRows.map((e) => ({
+        years: yearsBetween(e.from_year, e.to_year, e.still_here),
+        role: e.job_title ?? '',
+        place: [e.restaurant, e.location].filter(Boolean).join(', '),
+        date: formatDate(e.from_year, e.to_year, e.still_here),
+      })),
+      email: row.email ?? '',
+      verifications: {
+        aadhaar: row.aadhaar_status === 'verified',
+        phone: !!row.phone,
+        background: false,
+      },
+      willingStates: row.cities ?? [],
+    };
+
+    setProfile(detail);
+  }, [workerId]);
+
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       setProfileLoading(true);
-      const [{ data: p }, { data: exps }] = await Promise.all([
-        supabase.from('worker_profiles').select('*').eq('worker_id', workerId).maybeSingle(),
-        supabase
-          .from('work_experience')
-          .select('id, job_title, restaurant, location, from_year, to_year, still_here')
-          .eq('worker_id', workerId)
-          .order('from_year', { ascending: false }),
-      ]);
+      await loadProfile();
       if (cancelled) return;
-
-      // If no real profile row exists (mock seed worker), fall back to default
-      if (!p) {
-        setProfile(getWorkerProfile(workerId));
-        setProfileLoading(false);
-        return;
-      }
-
-      const row = p as WorkerProfileRow;
-      const expRows = (exps ?? []) as WorkExpRow[];
-
-      const detail: WorkerProfileDetail = {
-        workerId,
-        area: row.city ?? row.cities?.[0] ?? '',
-        languages: [],
-        cuisines: (row.skills ?? []).map((s) => ({ name: s, years: row.experience_years ?? 0 })),
-        experience: expRows.map((e) => ({
-          years: yearsBetween(e.from_year, e.to_year, e.still_here),
-          role: e.job_title ?? '',
-          place: [e.restaurant, e.location].filter(Boolean).join(', '),
-          date: formatDate(e.from_year, e.to_year, e.still_here),
-        })),
-        email: row.email ?? '',
-        verifications: {
-          aadhaar: row.aadhaar_status === 'verified',
-          phone: !!row.phone,
-          background: false,
-        },
-        willingStates: row.cities ?? [],
-      };
-
-      setProfile(detail);
       setProfileLoading(false);
     })();
 
@@ -118,15 +121,14 @@ export function CandidateClient({ workerId }: { workerId: string }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'worker_profiles', filter: `worker_id=eq.${workerId}` },
         () => {
-          // Reload on any change to this worker's profile
-          setProfileLoading(true);
+          loadProfile();
         },
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'work_experience', filter: `worker_id=eq.${workerId}` },
         () => {
-          setProfileLoading(true);
+          loadProfile();
         },
       )
       .subscribe();
@@ -135,7 +137,7 @@ export function CandidateClient({ workerId }: { workerId: string }) {
       cancelled = true;
       supabase.removeChannel(ch);
     };
-  }, [workerId]);
+  }, [workerId, loadProfile]);
 
   if (workersLoading || profileLoading || !profile) {
     return (
