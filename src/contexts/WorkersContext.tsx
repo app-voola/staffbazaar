@@ -57,6 +57,54 @@ function rowToWorker(r: WorkerRow): MockWorker {
   };
 }
 
+type WorkerProfileRow = {
+  worker_id: string;
+  full_name: string | null;
+  role: string | null;
+  experience_years: number | null;
+  city: string | null;
+  cities: string[] | null;
+  phone: string | null;
+  avatar_url: string | null;
+  salary_expected: number | null;
+  looking_for_work: boolean | null;
+  aadhaar_status: string | null;
+};
+
+function roleToEnum(role: string | null): WorkerRole {
+  const r = (role ?? '').toLowerCase();
+  if (/chef|cook/.test(r)) return 'chef';
+  if (/bartend/.test(r)) return 'bartender';
+  if (/helper|kitchen/.test(r)) return 'helper';
+  if (/waiter|steward|captain|server/.test(r)) return 'captain';
+  if (/runner/.test(r)) return 'runner';
+  return 'support';
+}
+
+function initialsFrom(name: string | null): string {
+  const parts = (name ?? '').trim().split(/\s+/).slice(0, 2);
+  return parts.map((p) => p[0]?.toUpperCase() ?? '').join('') || 'W';
+}
+
+function profileToWorker(p: WorkerProfileRow): MockWorker {
+  const name = p.full_name || 'Worker';
+  return {
+    id: p.worker_id,
+    name,
+    role: roleToEnum(p.role),
+    roleLabel: p.role ?? 'Worker',
+    city: p.city || (p.cities && p.cities[0]) || '',
+    availability: (p.looking_for_work === false ? 'month' : 'week') as Availability,
+    experience: p.experience_years ?? 0,
+    salary: p.salary_expected ?? 0,
+    rating: 0,
+    phone: p.phone ?? '',
+    avatar: p.avatar_url ?? undefined,
+    initials: initialsFrom(p.full_name),
+    verified: p.aadhaar_status === 'verified',
+  };
+}
+
 export function WorkersProvider({ children }: { children: ReactNode }) {
   const [workers, setWorkers] = useState<MockWorker[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,38 +112,34 @@ export function WorkersProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
 
-    (async () => {
-      const { data, error } = await supabase
-        .from('workers')
-        .select('*')
-        .order('created_at', { ascending: true });
-
+    const loadAll = async () => {
+      const [seedRes, profileRes] = await Promise.all([
+        supabase.from('workers').select('*').order('created_at', { ascending: true }),
+        supabase.from('worker_profiles').select('*').order('created_at', { ascending: true }),
+      ]);
       if (cancelled) return;
-      if (error) console.error('[workers] load failed', error);
-      else if (data) setWorkers((data as WorkerRow[]).map(rowToWorker));
+      if (seedRes.error) console.error('[workers] load failed', seedRes.error);
+      if (profileRes.error) console.error('[worker_profiles] load failed', profileRes.error);
+
+      const seedWorkers = (seedRes.data ?? []).map((r) => rowToWorker(r as WorkerRow));
+      const realWorkers = (profileRes.data ?? [])
+        .filter((p) => !!p.full_name)
+        .map((p) => profileToWorker(p as WorkerProfileRow));
+
+      const byId = new Map<string, MockWorker>();
+      seedWorkers.forEach((w) => byId.set(w.id, w));
+      // Real profiles win over any mock row with the same id
+      realWorkers.forEach((w) => byId.set(w.id, w));
+      setWorkers(Array.from(byId.values()));
       setLoading(false);
-    })();
+    };
+
+    loadAll();
 
     const channel = supabase
-      .channel('workers-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'workers' },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            const row = payload.new as WorkerRow;
-            setWorkers((prev) =>
-              prev.some((w) => w.id === row.id) ? prev : [...prev, rowToWorker(row)],
-            );
-          } else if (payload.eventType === 'UPDATE') {
-            const row = payload.new as WorkerRow;
-            setWorkers((prev) => prev.map((w) => (w.id === row.id ? rowToWorker(row) : w)));
-          } else if (payload.eventType === 'DELETE') {
-            const old = payload.old as { id: string };
-            setWorkers((prev) => prev.filter((w) => w.id !== old.id));
-          }
-        },
-      )
+      .channel('workers-combined')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'workers' }, () => loadAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'worker_profiles' }, () => loadAll())
       .subscribe();
 
     return () => {
