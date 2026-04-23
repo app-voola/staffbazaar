@@ -64,7 +64,7 @@ export function CandidateClient({ workerId }: { workerId: string }) {
   const [toast, setToast] = useState('');
 
   const loadProfile = useCallback(async () => {
-    const [{ data: p }, { data: exps }] = await Promise.all([
+    const [profileRes, expsRes] = await Promise.all([
       supabase.from('worker_profiles').select('*').eq('worker_id', workerId).maybeSingle(),
       supabase
         .from('work_experience')
@@ -72,6 +72,13 @@ export function CandidateClient({ workerId }: { workerId: string }) {
         .eq('worker_id', workerId)
         .order('from_year', { ascending: false }),
     ]);
+
+    if (profileRes.error) console.error('[candidate] worker_profiles load failed', profileRes.error);
+    if (expsRes.error) console.error('[candidate] work_experience load failed', expsRes.error);
+
+    const p = profileRes.data;
+    const exps = expsRes.data;
+    console.debug('[candidate] loaded', { workerId, hasProfile: !!p, expCount: exps?.length ?? 0 });
 
     // If no real profile row exists (mock seed worker), fall back to default
     if (!p) {
