@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useWorkerI18n } from '@/contexts/WorkerI18nContext';
 import { supabase } from '@/lib/supabase';
 import { translateText } from '@/lib/translate-text';
+import { formatBubbleTime, formatRelativeTime } from '@/lib/format-time';
 
 interface Conversation {
   id: string;
@@ -31,23 +32,6 @@ interface Message {
 type ConvFilter = 'all' | 'unread';
 
 const QUICK_REPLY_KEYS = ['qr_interested', 'qr_when_visit', 'qr_start_now', 'qr_thank_you'] as const;
-
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
-}
-
-function formatShortTime(iso: string): string {
-  const d = new Date(iso);
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
-  if (d.toDateString() === today.toDateString()) {
-    return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
-  }
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-}
 
 export function WorkerMessagesClient() {
   const { user } = useAuth();
@@ -364,7 +348,6 @@ export function WorkerMessagesClient() {
       .from('conversations')
       .update({
         last_message: text,
-        time: formatTime(new Date().toISOString()),
         unread: nextUnread,
         updated_at: new Date().toISOString(),
       })
@@ -448,7 +431,7 @@ export function WorkerMessagesClient() {
                     <div className="chat-last-message">{c.last_message ?? 'New conversation'}</div>
                   </div>
                   <div className="chat-meta">
-                    <span className="chat-time">{c.time ?? formatShortTime(c.updated_at)}</span>
+                    <span className="chat-time">{formatRelativeTime(c.updated_at)}</span>
                     {c.unread > 0 && <span className="chat-unread-badge">{c.unread}</span>}
                   </div>
                 </div>
@@ -532,7 +515,7 @@ export function WorkerMessagesClient() {
                     <div key={m.id} className={`chat-bubble ${m.from_me ? 'received' : 'sent'}`}>
                       <p>{displayText}</p>
                       <div className="bubble-meta">
-                        <span className="bubble-time">{formatTime(m.created_at)}</span>
+                        <span className="bubble-time">{formatBubbleTime(m.created_at)}</span>
                         {isPending && <span className="bubble-translating">{t('msg_translating')}</span>}
                       </div>
                     </div>

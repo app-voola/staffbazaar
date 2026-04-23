@@ -1,6 +1,7 @@
 'use client';
 
 import type { MockConversation } from '@/services/mock/conversations';
+import { formatRelativeTime } from '@/lib/format-time';
 
 export function ConversationItem({
   conv,
@@ -11,6 +12,7 @@ export function ConversationItem({
   active: boolean;
   onClick: () => void;
 }) {
+  const timeLabel = formatRelativeTime(conv.updatedAt) || conv.time;
   return (
     <div
       className={`chat-item${conv.unread > 0 ? ' unread' : ''}${active ? ' selected' : ''}`}
@@ -29,7 +31,7 @@ export function ConversationItem({
         <div className="chat-last-message">{conv.lastMessage}</div>
       </div>
       <div className="chat-meta">
-        <div className="chat-time">{conv.time}</div>
+        <div className="chat-time">{timeLabel}</div>
         {conv.unread > 0 && <div className="chat-unread-badge">{conv.unread}</div>}
       </div>
 

@@ -3,6 +3,7 @@ export interface MockMessage {
   fromMe: boolean;
   text: string;
   time: string;
+  createdAt?: string;
 }
 
 export interface MockConversation {
@@ -14,6 +15,7 @@ export interface MockConversation {
   type: 'active' | 'hired';
   lastMessage: string;
   time: string;
+  updatedAt?: string;
   unread: number;
   messages: MockMessage[];
 }

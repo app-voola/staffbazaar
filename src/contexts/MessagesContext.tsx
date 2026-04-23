@@ -43,6 +43,7 @@ type ConversationRow = {
   last_message: string | null;
   time: string | null;
   unread: number | null;
+  updated_at: string | null;
 };
 
 type MessageRow = {
@@ -51,6 +52,7 @@ type MessageRow = {
   from_me: boolean | null;
   text: string;
   time: string | null;
+  created_at: string | null;
 };
 
 function rowToMsg(r: MessageRow): MockMessage {
@@ -59,6 +61,7 @@ function rowToMsg(r: MessageRow): MockMessage {
     fromMe: r.from_me ?? false,
     text: r.text,
     time: r.time ?? '',
+    createdAt: r.created_at ?? undefined,
   };
 }
 
@@ -72,6 +75,7 @@ function rowToConv(r: ConversationRow, messages: MockMessage[]): MockConversatio
     type: (r.type ?? 'active') as MockConversation['type'],
     lastMessage: r.last_message ?? '',
     time: r.time ?? '',
+    updatedAt: r.updated_at ?? undefined,
     unread: r.unread ?? 0,
     messages,
   };

@@ -1,13 +1,15 @@
 'use client';
 
 import type { MockMessage } from '@/services/mock/conversations';
+import { formatBubbleTime } from '@/lib/format-time';
 
 export function ChatBubble({ message }: { message: MockMessage }) {
+  const timeLabel = formatBubbleTime(message.createdAt) || message.time;
   return (
     <div className={`chat-bubble-row ${message.fromMe ? 'right' : 'left'}`}>
       <div className={`chat-bubble ${message.fromMe ? 'sent' : 'received'}`}>
         <p>{message.text}</p>
-        <div className="bubble-time">{message.time}</div>
+        <div className="bubble-time">{timeLabel}</div>
       </div>
 
       <style>{`
