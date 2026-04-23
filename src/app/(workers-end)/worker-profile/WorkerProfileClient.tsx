@@ -13,6 +13,7 @@ interface WorkExp {
   id: string;
   job_title: string;
   restaurant: string;
+  location: string;
   from_year: number | null;
   to_year: number | null;
   still_here: boolean;
@@ -170,7 +171,7 @@ export function WorkerProfileClient() {
         supabase.from('worker_profiles').select('*').eq('worker_id', user.id).maybeSingle(),
         supabase
           .from('work_experience')
-          .select('id, job_title, restaurant, from_year, to_year, still_here')
+          .select('id, job_title, restaurant, location, from_year, to_year, still_here')
           .eq('worker_id', user.id)
           .order('created_at', { ascending: false }),
       ]);
@@ -199,6 +200,7 @@ export function WorkerProfileClient() {
         id: e.id,
         job_title: e.job_title ?? '',
         restaurant: e.restaurant ?? '',
+        location: (e as { location?: string | null }).location ?? '',
         from_year: e.from_year,
         to_year: e.to_year,
         still_here: e.still_here,
@@ -208,6 +210,7 @@ export function WorkerProfileClient() {
           id: `new-${Date.now()}`,
           job_title: '',
           restaurant: '',
+          location: '',
           from_year: null,
           to_year: null,
           still_here: false,
@@ -280,6 +283,7 @@ export function WorkerProfileClient() {
         id: `new-${Date.now()}`,
         job_title: '',
         restaurant: '',
+        location: '',
         from_year: null,
         to_year: null,
         still_here: false,
@@ -337,6 +341,7 @@ export function WorkerProfileClient() {
         worker_id: user.id,
         job_title: e.job_title,
         restaurant: e.restaurant,
+        location: e.location,
         from_year: e.from_year,
         to_year: e.still_here ? null : e.to_year,
         still_here: e.still_here,
@@ -809,7 +814,16 @@ export function WorkerProfileClient() {
                         type="text"
                         value={e.restaurant}
                         onChange={(ev) => updateExp(e.id, { restaurant: ev.target.value })}
-                        placeholder="Restaurant name, City"
+                        placeholder="Restaurant name"
+                      />
+                    </div>
+                    <div className="field">
+                      <label>Location</label>
+                      <input
+                        type="text"
+                        value={e.location}
+                        onChange={(ev) => updateExp(e.id, { location: ev.target.value })}
+                        placeholder="City or area"
                       />
                     </div>
                     <div className="field">
@@ -1192,7 +1206,8 @@ export function WorkerProfileClient() {
         .salary-labels { display: flex; justify-content: space-between; font-size: 12px; color: var(--charcoal-light); margin-top: 6px; }
 
         .exp-entry { position: relative; background: var(--cream); border: 1px solid var(--sand); border-radius: var(--radius-md); padding: 16px 16px 8px; margin-bottom: 12px; }
-        .exp-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .exp-row { display: grid; grid-template-columns: 1fr 1fr 1.1fr; gap: 12px; }
+        @media (max-width: 900px) { .exp-row { grid-template-columns: 1fr 1fr; } }
         @media (max-width: 640px) { .exp-row { grid-template-columns: 1fr; } }
         .exp-remove-btn { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; border-radius: 50%; background: white; border: 1.5px solid var(--sand); color: var(--charcoal-light); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
         .exp-remove-btn:hover { border-color: #DC2626; color: #DC2626; background: #FEE2E2; }

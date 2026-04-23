@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { type MockWorker } from '@/services/mock/workers';
 import { useWorkers } from '@/contexts/WorkersContext';
-import { getWorkerProfile } from '@/services/mock/workerProfiles';
+import { getWorkerProfile, type WorkerProfileDetail } from '@/services/mock/workerProfiles';
+import { supabase } from '@/lib/supabase';
 import { ProfileHero } from '@/components/candidate/ProfileHero';
 import { StatsBanner } from '@/components/candidate/StatsBanner';
 import { ExperienceTimeline } from '@/components/candidate/ExperienceTimeline';
@@ -14,17 +15,131 @@ import { ContactSideCard } from '@/components/candidate/ContactSideCard';
 import { VerificationSideCard } from '@/components/candidate/VerificationSideCard';
 import { ShortlistModal } from '@/components/staff/ShortlistModal';
 
+interface WorkerProfileRow {
+  worker_id: string;
+  full_name: string | null;
+  role: string | null;
+  experience_years: number | null;
+  city: string | null;
+  cities: string[] | null;
+  phone: string | null;
+  email: string | null;
+  bio: string | null;
+  skills: string[] | null;
+  salary_expected: number | null;
+  looking_for_work: boolean | null;
+  aadhaar_status: string | null;
+  avatar_url: string | null;
+}
+
+interface WorkExpRow {
+  id: string;
+  job_title: string | null;
+  restaurant: string | null;
+  location: string | null;
+  from_year: number | null;
+  to_year: number | null;
+  still_here: boolean | null;
+}
+
+function formatDate(from: number | null, to: number | null, stillHere: boolean | null): string {
+  if (from && stillHere) return `${from} — Present`;
+  if (from && to) return `${from} — ${to}`;
+  if (from) return `${from}`;
+  return '';
+}
+
+function yearsBetween(from: number | null, to: number | null, stillHere: boolean | null): number {
+  if (!from) return 0;
+  const end = stillHere ? new Date().getFullYear() : to ?? from;
+  return Math.max(0, end - from);
+}
+
 export function CandidateClient({ workerId }: { workerId: string }) {
-  const { getById, loading } = useWorkers();
+  const { getById, loading: workersLoading } = useWorkers();
   const worker = getById(workerId);
+  const [profile, setProfile] = useState<WorkerProfileDetail | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
   const [shortlistOpen, setShortlistOpen] = useState<MockWorker | null>(null);
   const [toast, setToast] = useState('');
 
-  if (loading) {
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      setProfileLoading(true);
+      const [{ data: p }, { data: exps }] = await Promise.all([
+        supabase.from('worker_profiles').select('*').eq('worker_id', workerId).maybeSingle(),
+        supabase
+          .from('work_experience')
+          .select('id, job_title, restaurant, location, from_year, to_year, still_here')
+          .eq('worker_id', workerId)
+          .order('from_year', { ascending: false }),
+      ]);
+      if (cancelled) return;
+
+      // If no real profile row exists (mock seed worker), fall back to default
+      if (!p) {
+        setProfile(getWorkerProfile(workerId));
+        setProfileLoading(false);
+        return;
+      }
+
+      const row = p as WorkerProfileRow;
+      const expRows = (exps ?? []) as WorkExpRow[];
+
+      const detail: WorkerProfileDetail = {
+        workerId,
+        area: row.city ?? row.cities?.[0] ?? '',
+        languages: [],
+        cuisines: (row.skills ?? []).map((s) => ({ name: s, years: row.experience_years ?? 0 })),
+        experience: expRows.map((e) => ({
+          years: yearsBetween(e.from_year, e.to_year, e.still_here),
+          role: e.job_title ?? '',
+          place: [e.restaurant, e.location].filter(Boolean).join(', '),
+          date: formatDate(e.from_year, e.to_year, e.still_here),
+        })),
+        email: row.email ?? '',
+        verifications: {
+          aadhaar: row.aadhaar_status === 'verified',
+          phone: !!row.phone,
+          background: false,
+        },
+        willingStates: row.cities ?? [],
+      };
+
+      setProfile(detail);
+      setProfileLoading(false);
+    })();
+
+    const ch = supabase
+      .channel(`candidate-${workerId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'worker_profiles', filter: `worker_id=eq.${workerId}` },
+        () => {
+          // Reload on any change to this worker's profile
+          setProfileLoading(true);
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'work_experience', filter: `worker_id=eq.${workerId}` },
+        () => {
+          setProfileLoading(true);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(ch);
+    };
+  }, [workerId]);
+
+  if (workersLoading || profileLoading || !profile) {
     return (
-      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginTop: 16 }}>
-        Loading…
-      </h1>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginTop: 16 }}>Loading…</h1>
     );
   }
 
@@ -40,8 +155,6 @@ export function CandidateClient({ workerId }: { workerId: string }) {
       </>
     );
   }
-
-  const profile = getWorkerProfile(workerId);
 
   return (
     <>
