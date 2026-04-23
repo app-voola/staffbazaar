@@ -184,7 +184,14 @@ export function CandidateClient({ workerId }: { workerId: string }) {
       </Link>
 
       <ProfileHero worker={worker} profile={profile} onAddToJob={() => setShortlistOpen(worker)} />
-      <StatsBanner worker={worker} />
+      <StatsBanner
+        worker={worker}
+        experienceYears={
+          profile.experience.length
+            ? profile.experience.reduce((s, e) => s + e.years, 0)
+            : undefined
+        }
+      />
 
       <div className="detail-cols">
         <div>

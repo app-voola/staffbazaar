@@ -2,7 +2,14 @@
 
 import type { MockWorker } from '@/services/mock/workers';
 
-export function StatsBanner({ worker }: { worker: MockWorker }) {
+export function StatsBanner({
+  worker,
+  experienceYears,
+}: {
+  worker: MockWorker;
+  experienceYears?: number;
+}) {
+  const years = experienceYears ?? worker.experience;
   return (
     <div className="stats-banner">
       <div className="stat-cell">
@@ -22,7 +29,7 @@ export function StatsBanner({ worker }: { worker: MockWorker }) {
       <div className="stat-cell">
         <div className="stat-cell-label">Experience</div>
         <div className="stat-cell-value">
-          {worker.experience} <small>years</small>
+          {years} <small>years</small>
         </div>
       </div>
       <div className="stat-cell">
