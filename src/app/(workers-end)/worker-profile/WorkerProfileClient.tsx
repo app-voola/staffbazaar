@@ -1202,11 +1202,12 @@ export function WorkerProfileClient() {
         .duration-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         .duration-row select:disabled { background: var(--cream); color: var(--stone); cursor: not-allowed; }
 
-        .still-here-row { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--charcoal-mid); cursor: pointer; user-select: none; padding: 4px 0; position: relative; }
-        .still-here-row input[type="checkbox"] { position: absolute; opacity: 0; left: 0; top: 0; width: 20px; height: 20px; margin: 0; cursor: pointer; }
-        .sb-check-visual { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--sand); background: white; flex-shrink: 0; position: relative; transition: all 0.15s; }
+        .still-here-row { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--charcoal-mid); cursor: pointer; user-select: none; padding: 4px 0; }
+        .still-here-row input[type="checkbox"] { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+        .sb-check-visual { display: inline-block; width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--sand); background: white; flex-shrink: 0; position: relative; transition: all 0.15s; box-sizing: border-box; }
+        .still-here-row:hover .sb-check-visual { border-color: #10B981; }
         .sb-check-visual.checked { background: #10B981; border-color: #10B981; }
-        .sb-check-visual.checked::after { content: ''; position: absolute; left: 5px; top: 1px; width: 6px; height: 12px; border: solid white; border-width: 0 2.5px 2.5px 0; transform: rotate(45deg); }
+        .sb-check-visual.checked::after { content: ''; position: absolute; left: 4px; top: 0px; width: 6px; height: 11px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg); }
 
         .add-exp-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; border: 2px dashed var(--sand); border-radius: var(--radius-md); background: white; color: var(--charcoal-mid); font-weight: 700; font-family: var(--font-body); font-size: 13px; cursor: pointer; transition: all 0.2s; }
         .add-exp-btn:hover { border-color: var(--ember); color: var(--ember); background: var(--ember-glow); }
