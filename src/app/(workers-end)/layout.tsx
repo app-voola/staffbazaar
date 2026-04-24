@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { WorkerShell } from '@/components/layout/WorkerShell';
 import { useAuth } from '@/contexts/AuthContext';
 import { WorkerI18nProvider } from '@/contexts/WorkerI18nContext';
@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase';
 export default function WorkersEndLayout({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -33,6 +34,34 @@ export default function WorkersEndLayout({ children }: { children: ReactNode }) 
       )
       .then(() => {});
   }, [user?.id]);
+
+  // Route workers who haven't finished the create-profile wizard back
+  // to it. Skip the guard on the wizard itself and on the full worker
+  // edit-profile page so they can finish there too.
+  useEffect(() => {
+    if (!user) return;
+    const exempt = pathname?.startsWith('/create-profile') || pathname?.startsWith('/worker-profile');
+    if (exempt) return;
+    let cancelled = false;
+    supabase
+      .from('worker_profiles')
+      .select('full_name, role, cities')
+      .eq('worker_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return;
+        const done =
+          !!data &&
+          !!(data.full_name as string | null)?.trim() &&
+          !!(data.role as string | null) &&
+          Array.isArray(data.cities) &&
+          (data.cities as string[]).length > 0;
+        if (!done) router.replace('/create-profile');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, pathname, router]);
 
   if (loading || !user) {
     return (

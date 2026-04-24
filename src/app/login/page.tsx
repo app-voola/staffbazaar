@@ -48,7 +48,7 @@ export default function LoginPage() {
     }
     setError('');
     setBusy(true);
-    const { error: pErr } = await supabase.auth.signInWithPassword({
+    const { data: signInData, error: pErr } = await supabase.auth.signInWithPassword({
       email: trimmed,
       password,
     });
@@ -57,7 +57,27 @@ export default function LoginPage() {
       setError(pErr.message);
       return;
     }
-    window.location.href = role === 'worker' ? '/worker-dashboard' : '/dashboard';
+
+    // If a worker signs in but hasn't finished the onboarding wizard yet
+    // (no full_name or no role/city saved), push them back into it so
+    // they don't land on an empty dashboard.
+    if (role === 'worker' && signInData.user) {
+      const { data: profile } = await supabase
+        .from('worker_profiles')
+        .select('full_name, role, cities')
+        .eq('worker_id', signInData.user.id)
+        .maybeSingle();
+      const done =
+        !!profile &&
+        !!(profile.full_name as string | null)?.trim() &&
+        !!(profile.role as string | null) &&
+        Array.isArray(profile.cities) &&
+        (profile.cities as string[]).length > 0;
+      window.location.href = done ? '/worker-dashboard' : '/create-profile';
+      return;
+    }
+
+    window.location.href = '/dashboard';
   };
 
   const signInWithGoogle = async () => {
