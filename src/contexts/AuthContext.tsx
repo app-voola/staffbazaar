@@ -58,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error('[auth] restaurant load failed', error);
         return null;
       }
+      console.debug('[auth] loadRestaurant', { ownerId, hasRow: !!data, name: data?.name });
       if (!data) return null;
       return {
         id: data.id,

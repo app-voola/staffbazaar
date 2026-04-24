@@ -1,9 +1,11 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJobs } from '@/contexts/JobsContext';
 import { useApplicants } from '@/contexts/ApplicantsContext';
 import { useMessages } from '@/contexts/MessagesContext';
+import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 
 function greeting(date = new Date()) {
@@ -18,7 +20,28 @@ export default function OwnerDashboardPage() {
   const { activeCount, postsUsed, postsLimit } = useJobs();
   const { applicants } = useApplicants();
   const { unreadCount } = useMessages();
+  // Fallback fetch so the welcome name appears even if AuthContext's
+  // restaurant state hasn't hydrated yet (or is stale on this tab).
+  const [fallbackName, setFallbackName] = useState<string | null>(null);
+  useEffect(() => {
+    if (!user?.id || restaurant?.name) return;
+    let cancelled = false;
+    supabase
+      .from('restaurants')
+      .select('name')
+      .eq('owner_id', user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) console.error('[dashboard] restaurant fetch failed', error);
+        if (data?.name) setFallbackName(data.name as string);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, restaurant?.name]);
 
+  const restaurantName = restaurant?.name || fallbackName;
   const newApplicants = applicants.filter((a) => a.stage === 'applied').length;
   const hiredCount = applicants.filter((a) => a.stage === 'hired').length;
   const firstName = user?.full_name?.split(' ')[0] ?? 'there';
@@ -37,7 +60,7 @@ export default function OwnerDashboardPage() {
           <h1>
             {greeting()}, {firstName}
           </h1>
-          <div className="subtitle">{restaurant?.name ?? 'Your restaurant'}</div>
+          <div className="subtitle">{restaurantName || 'Your restaurant'}</div>
           <div className="date-text">{dateStr}</div>
         </div>
         <div className="quick-actions">

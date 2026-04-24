@@ -1,17 +1,36 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { useJobs } from '@/contexts/JobsContext';
 import { useApplicants } from '@/contexts/ApplicantsContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { KanbanBoard } from '@/components/applicants/KanbanBoard';
 
 export function JobApplicantsClient({ jobId }: { jobId: string }) {
   const { jobs } = useJobs();
   const { byJob } = useApplicants();
-  const { restaurant } = useAuth();
+  const { user, restaurant } = useAuth();
   const job = jobs.find((j) => j.id === jobId);
   const applicantCount = byJob(jobId).length;
+  const [fallbackName, setFallbackName] = useState<string | null>(null);
+  useEffect(() => {
+    if (!user?.id || restaurant?.name) return;
+    let cancelled = false;
+    supabase
+      .from('restaurants')
+      .select('name')
+      .eq('owner_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled && data?.name) setFallbackName(data.name as string);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, restaurant?.name]);
+  const restaurantName = restaurant?.name || fallbackName;
 
   if (!job) {
     return (
@@ -51,7 +70,7 @@ export function JobApplicantsClient({ jobId }: { jobId: string }) {
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 28 }}>
           {job.title}
-          {restaurant?.name ? ` — ${restaurant.name}` : ''}
+          {restaurantName ? ` — ${restaurantName}` : ''}
         </h1>
         <div style={{ fontSize: 13, color: 'var(--stone)', marginTop: 2 }}>
           Posted {job.postedDaysAgo === 0 ? 'today' : `${job.postedDaysAgo} day${job.postedDaysAgo === 1 ? '' : 's'} ago`}
