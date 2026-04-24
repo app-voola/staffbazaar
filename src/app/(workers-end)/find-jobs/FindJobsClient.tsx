@@ -40,6 +40,23 @@ const CITY_OPTIONS = [
   'Chandigarh',
 ];
 
+type SalaryRange = 'any' | 'u20' | '20-30' | '30-50' | '50+';
+const SALARY_OPTIONS: { value: SalaryRange; label: string; min: number; max: number | null }[] = [
+  { value: 'any',   label: 'Any Salary',         min: 0,     max: null },
+  { value: 'u20',   label: 'Under ₹20,000',      min: 0,     max: 20000 },
+  { value: '20-30', label: '₹20,000 – ₹30,000',  min: 20000, max: 30000 },
+  { value: '30-50', label: '₹30,000 – ₹50,000',  min: 30000, max: 50000 },
+  { value: '50+',   label: '₹50,000+',           min: 50000, max: null },
+];
+
+type SortKey = 'newest' | 'oldest' | 'salary_desc' | 'salary_asc';
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'newest',      label: 'Newest' },
+  { value: 'oldest',      label: 'Oldest' },
+  { value: 'salary_desc', label: 'Salary: High to Low' },
+  { value: 'salary_asc',  label: 'Salary: Low to High' },
+];
+
 function formatSalary(min: number, max: number): string {
   if (!min && !max) return '';
   const fmt = (n: number) => `₹${n.toLocaleString('en-IN')}`;
@@ -66,8 +83,8 @@ export function FindJobsClient() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [city, setCity] = useState('');
-  const [salaryExpected, setSalaryExpected] = useState<number | null>(null);
-  const [matchSalary, setMatchSalary] = useState(true);
+  const [salaryRange, setSalaryRange] = useState<SalaryRange>('any');
+  const [sortBy, setSortBy] = useState<SortKey>('newest');
   const [toast, setToast] = useState('');
 
   useEffect(() => {
@@ -76,7 +93,7 @@ export function FindJobsClient() {
 
     const load = async () => {
       setLoading(true);
-      const [{ data: jobRows }, savedRes, appsRes, profileRes] = await Promise.all([
+      const [{ data: jobRows }, savedRes, appsRes] = await Promise.all([
         supabase
           .from('jobs')
           .select('id, title, role, salary_min, salary_max, shift, job_type, owner_id, created_at')
@@ -84,11 +101,8 @@ export function FindJobsClient() {
           .order('created_at', { ascending: false }),
         supabase.from('saved_jobs').select('job_id').eq('worker_id', user.id),
         supabase.from('applicants').select('job_id').eq('worker_id', user.id),
-        supabase.from('worker_profiles').select('salary_expected').eq('worker_id', user.id).maybeSingle(),
       ]);
       if (cancelled) return;
-
-      setSalaryExpected((profileRes.data?.salary_expected as number | null) ?? null);
 
       const ownerIds = Array.from(new Set((jobRows ?? []).map((j) => j.owner_id)));
       const restMap: Record<string, { name: string; city: string; cover_image: string | null }> = {};
@@ -132,13 +146,19 @@ export function FindJobsClient() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const c = city.trim().toLowerCase();
-    // Salary match: job's max must cover at least 70% of worker's expected pay.
-    // Keeps some flexibility for negotiation while dropping obviously underpaid posts.
-    const salaryFloor = salaryExpected && matchSalary ? salaryExpected * 0.7 : null;
-    return jobs.filter((j) => {
-      if (c && !(j.restaurant_city ?? '').toLowerCase().includes(c)) return false;
-      if (salaryFloor !== null && (j.salary_max || 0) < salaryFloor) return false;
+    const range = SALARY_OPTIONS.find((o) => o.value === salaryRange);
+    const rangeMin = range?.min ?? 0;
+    const rangeMax = range?.max ?? null;
+
+    const matched = jobs.filter((j) => {
+      if (city && (j.restaurant_city ?? '') !== city) return false;
+      // Include jobs whose salary band overlaps the selected range
+      if (salaryRange !== 'any') {
+        const jobMin = j.salary_min || 0;
+        const jobMax = j.salary_max || jobMin;
+        if (rangeMax !== null && jobMin > rangeMax) return false;
+        if (rangeMin > jobMax) return false;
+      }
       if (!q) return true;
       return (
         j.title.toLowerCase().includes(q) ||
@@ -146,7 +166,23 @@ export function FindJobsClient() {
         (j.restaurant_name ?? '').toLowerCase().includes(q)
       );
     });
-  }, [jobs, query, city, salaryExpected, matchSalary]);
+
+    const sorted = [...matched];
+    sorted.sort((a, b) => {
+      switch (sortBy) {
+        case 'oldest':
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        case 'salary_desc':
+          return (b.salary_max || b.salary_min || 0) - (a.salary_max || a.salary_min || 0);
+        case 'salary_asc':
+          return (a.salary_min || a.salary_max || 0) - (b.salary_min || b.salary_max || 0);
+        case 'newest':
+        default:
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+    });
+    return sorted;
+  }, [jobs, query, city, salaryRange, sortBy]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -190,50 +226,59 @@ export function FindJobsClient() {
         <p className="page-sub">{t('page_find_jobs_sub')}</p>
       </div>
 
-      <div className="search-bar">
-        <div className="search-field">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t('search_role_placeholder')}
-          />
+      <div className="filter-bar">
+        <div className="filter-col">
+          <div className="filter-label">Search</div>
+          <div className="filter-field">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search jobs, restaurants..."
+            />
+          </div>
         </div>
-        <div className="search-field">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-            <circle cx="12" cy="10" r="3" />
-          </svg>
-          <input
+        <div className="filter-col">
+          <div className="filter-label">City</div>
+          <select
+            className="filter-select"
             value={city}
             onChange={(e) => setCity(e.target.value)}
-            placeholder={t('search_city_placeholder')}
-            list="city-options"
-            autoComplete="off"
-          />
-          <datalist id="city-options">
+          >
+            <option value="">All Cities</option>
             {CITY_OPTIONS.map((c) => (
-              <option key={c} value={c} />
+              <option key={c} value={c}>{c}</option>
             ))}
-          </datalist>
+          </select>
+        </div>
+        <div className="filter-col">
+          <div className="filter-label">Salary</div>
+          <select
+            className="filter-select"
+            value={salaryRange}
+            onChange={(e) => setSalaryRange(e.target.value as SalaryRange)}
+          >
+            {SALARY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="filter-col">
+          <div className="filter-label">Sort By</div>
+          <select
+            className="filter-select"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortKey)}
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
         </div>
       </div>
-
-      {salaryExpected ? (
-        <label className="salary-match-toggle">
-          <input
-            type="checkbox"
-            checked={matchSalary}
-            onChange={(e) => setMatchSalary(e.target.checked)}
-          />
-          <span>
-            Match my salary (≥ ₹{Math.round(salaryExpected * 0.7).toLocaleString('en-IN')}/mo)
-          </span>
-        </label>
-      ) : null}
 
       {loading ? (
         <div className="tab-empty">
@@ -329,14 +374,17 @@ export function FindJobsClient() {
         .sb-page-head h1 em { color: var(--ember); font-style: italic; }
         .page-sub { color: var(--charcoal-light); font-size: 14px; margin-top: 4px; }
 
-        .salary-match-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--charcoal-light); font-weight: 600; cursor: pointer; margin-bottom: 16px; }
-        .salary-match-toggle input { accent-color: var(--ember); width: 16px; height: 16px; cursor: pointer; }
-        .search-bar { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 24px; }
-        @media (max-width: 700px) { .search-bar { grid-template-columns: 1fr; } }
-        .search-field { position: relative; }
-        .search-field svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--stone); }
-        .search-field input { width: 100%; padding: 12px 14px 12px 38px; border: 1.5px solid var(--sand); border-radius: var(--radius-md); background: white; font-size: 14px; font-family: var(--font-body); color: var(--charcoal); box-sizing: border-box; }
-        .search-field input:focus { outline: none; border-color: var(--ember); }
+        .filter-bar { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 20px; padding: 18px 22px; background: white; border: 1px solid var(--sand); border-radius: var(--radius-lg); box-shadow: 0 1px 3px rgba(0,0,0,0.04); margin-bottom: 24px; align-items: end; }
+        @media (max-width: 1100px) { .filter-bar { grid-template-columns: 1fr 1fr; } }
+        @media (max-width: 560px)  { .filter-bar { grid-template-columns: 1fr; padding: 14px 16px; gap: 14px; } }
+        .filter-col { display: flex; flex-direction: column; min-width: 0; }
+        .filter-label { font-size: 11px; font-weight: 700; color: var(--stone); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; }
+        .filter-field { position: relative; }
+        .filter-field svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--stone); pointer-events: none; }
+        .filter-field input { width: 100%; padding: 12px 14px 12px 38px; border: 1.5px solid var(--sand); border-radius: var(--radius-md); background: white; font-size: 14px; font-family: var(--font-body); color: var(--charcoal); box-sizing: border-box; }
+        .filter-field input:focus { outline: none; border-color: var(--ember); }
+        .filter-select { width: 100%; padding: 12px 36px 12px 14px; border: 1.5px solid var(--sand); border-radius: var(--radius-md); background-color: white; font-size: 14px; font-weight: 600; font-family: var(--font-body); color: var(--charcoal); box-sizing: border-box; cursor: pointer; appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>"); background-repeat: no-repeat; background-position: right 14px center; background-size: 12px; }
+        .filter-select:focus { outline: none; border-color: var(--ember); }
 
         .job-feed { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
         @media (max-width: 1100px) { .job-feed { grid-template-columns: repeat(2, 1fr); } }

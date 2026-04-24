@@ -38,7 +38,11 @@ export default function SignupPage() {
     setError('');
     setBusy(true);
 
-    const target = role === 'worker' ? '/worker-dashboard' : '/dashboard';
+    // New workers land on the /create-profile wizard; owners still go to
+    // the owner dashboard. Existing (already-registered) users always go
+    // to their dashboard regardless of role.
+    const newWorkerTarget = '/create-profile';
+    const dashboardTarget = role === 'worker' ? '/worker-dashboard' : '/dashboard';
 
     const { data, error: sErr } = await supabase.auth.signUp({
       email: trimmed,
@@ -56,7 +60,7 @@ export default function SignupPage() {
         setError(lErr.message);
         return;
       }
-      window.location.href = target;
+      window.location.href = dashboardTarget;
       return;
     }
 
@@ -67,7 +71,7 @@ export default function SignupPage() {
     }
 
     if (data.session) {
-      window.location.href = target;
+      window.location.href = role === 'worker' ? newWorkerTarget : dashboardTarget;
       return;
     }
 
