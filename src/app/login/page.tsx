@@ -20,31 +20,28 @@ export default function LoginPage() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('sb_role', r);
     }
-    // Workers default to the signup/create-profile flow since most people
-    // clicking "I'm looking for work" are new. Returning workers reach the
-    // password form via the "Already have an account? Log in" link on
-    // signup, or by visiting /login directly. Owners still see the login
-    // form since that's the existing flow.
+    // Workers: always land on the Create Profile wizard next. If there is
+    // no session yet we go through /signup first, which redirects to
+    // /create-profile after account creation. If the worker has already
+    // finished the wizard, /create-profile bounces them to the dashboard.
     //
-    // If a real session already exists, short-circuit to the right
-    // dashboard regardless of role.
+    // Owners still see the login form since their flow is unchanged.
     supabase.auth
       .getSession()
       .then(({ data: sess }) => {
         const isReal = !!sess.session && !sess.session.user.is_anonymous;
-        if (isReal) {
-          window.location.href = r === 'worker' ? '/worker-dashboard' : '/dashboard';
+        if (r === 'worker') {
+          window.location.href = isReal ? '/create-profile' : '/signup';
           return;
         }
-        if (r === 'worker') {
-          window.location.href = '/signup';
+        if (isReal) {
+          window.location.href = '/dashboard';
           return;
         }
         setStep('form');
       })
       .catch((err) => {
         console.error('[login] getSession failed', err);
-        // Fall back to the same behaviour as "no session"
         if (r === 'worker') window.location.href = '/signup';
         else setStep('form');
       });

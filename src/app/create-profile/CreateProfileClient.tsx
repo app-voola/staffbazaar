@@ -54,6 +54,32 @@ export function CreateProfileClient() {
     if (user?.full_name && user.full_name !== 'Owner') setFullName(user.full_name);
   }, [user?.full_name]);
 
+  // If the worker already finished onboarding, skip the wizard and go
+  // straight to the dashboard. Lets returning workers who click
+  // "I'm looking for work" from the role picker land on the right page.
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    supabase
+      .from('worker_profiles')
+      .select('full_name, role, cities')
+      .eq('worker_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return;
+        const done =
+          !!data &&
+          !!(data.full_name as string | null)?.trim() &&
+          !!(data.role as string | null) &&
+          Array.isArray(data.cities) &&
+          (data.cities as string[]).length > 0;
+        if (done) router.replace('/worker-dashboard');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, router]);
+
   const toggleCity = (c: string) => {
     setCities((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
     setErrors((e) => ({ ...e, city: false }));
