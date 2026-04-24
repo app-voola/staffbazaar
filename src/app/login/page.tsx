@@ -15,21 +15,24 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const pickRole = async (r: Role) => {
+  const pickRole = (r: Role) => {
     setRole(r);
     if (typeof window !== 'undefined') {
       localStorage.setItem('sb_role', r);
     }
-
-    // Both owner and worker authenticate with email/password.
-    // If a real session already exists, skip straight to the right dashboard.
-    const { data: sess } = await supabase.auth.getSession();
-    const isReal = !!sess.session && !sess.session.user.is_anonymous;
-    if (isReal) {
-      window.location.href = r === 'worker' ? '/worker-dashboard' : '/dashboard';
-      return;
-    }
+    // Show the password form immediately. If a real session already exists,
+    // redirect to the dashboard in the background so we never sit on the
+    // role picker because of a slow/blocked auth check.
     setStep('form');
+    supabase.auth
+      .getSession()
+      .then(({ data: sess }) => {
+        const isReal = !!sess.session && !sess.session.user.is_anonymous;
+        if (isReal) {
+          window.location.href = r === 'worker' ? '/worker-dashboard' : '/dashboard';
+        }
+      })
+      .catch((err) => console.error('[login] getSession failed', err));
   };
 
   const signIn = async (e: React.FormEvent) => {

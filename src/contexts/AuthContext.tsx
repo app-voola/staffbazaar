@@ -74,17 +74,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) console.error('[auth] getSession failed', error);
       const mock = toMockUser(data.session?.user ?? null);
       setUser(mock);
-      const rest = mock ? await loadRestaurant(mock.id) : null;
-      if (cancelled) return;
-      setRestaurant(rest);
+      // Unblock the UI immediately — restaurant load happens in the
+      // background so a slow/failed lookup can't strand the layout on
+      // its "Loading…" screen.
       setLoading(false);
+      if (mock) {
+        loadRestaurant(mock.id).then((rest) => {
+          if (!cancelled) setRestaurant(rest);
+        });
+      }
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       const mock = toMockUser(session?.user ?? null);
       setUser(mock);
-      const rest = mock ? await loadRestaurant(mock.id) : null;
-      setRestaurant(rest);
+      if (mock) {
+        loadRestaurant(mock.id).then((rest) => {
+          if (!cancelled) setRestaurant(rest);
+        });
+      } else {
+        setRestaurant(null);
+      }
     });
 
     return () => {
