@@ -9,6 +9,7 @@ import { LanguagePicker } from '@/components/worker/LanguagePicker';
 import { WorkStatusCard } from '@/components/worker/WorkStatusCard';
 import { supabase } from '@/lib/supabase';
 import type { TranslationKey } from '@/lib/worker-translations';
+import { isProfileComplete } from '@/lib/worker-profile-completion';
 
 const DashboardIcon = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -102,13 +103,14 @@ export function WorkerSidebar({ onNavigate }: { onNavigate?: () => void }) {
 
     const load = async () => {
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const [convs, notifs, saved, newJobs, apps, profile] = await Promise.all([
+      const [convs, notifs, saved, newJobs, apps, profile, expCount] = await Promise.all([
         supabase.from('conversations').select('unread').eq('worker_id', user.id),
         supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('read', false),
         supabase.from('saved_jobs').select('job_id', { count: 'exact', head: true }).eq('worker_id', user.id),
         supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'active').gte('created_at', twentyFourHoursAgo),
         supabase.from('applicants').select('stage').eq('worker_id', user.id),
-        supabase.from('worker_profiles').select('full_name, role, experience_years, city, phone, bio, salary_expected').eq('worker_id', user.id).maybeSingle(),
+        supabase.from('worker_profiles').select('full_name, role, aadhaar_status, experience_years, cities, skills').eq('worker_id', user.id).maybeSingle(),
+        supabase.from('work_experience').select('id', { count: 'exact', head: true }).eq('worker_id', user.id),
       ]);
       if (cancelled) return;
 
@@ -129,12 +131,17 @@ export function WorkerSidebar({ onNavigate }: { onNavigate?: () => void }) {
       setAppUpdatesCount(progressed);
 
       const p = profile.data as Record<string, unknown> | null;
-      const fields = ['full_name', 'role', 'experience_years', 'city', 'phone', 'bio', 'salary_expected'];
-      const filled = p ? fields.filter((f) => {
-        const v = p[f];
-        return v !== null && v !== undefined && v !== '' && v !== 0;
-      }).length : 0;
-      setProfileIncomplete(filled < fields.length);
+      setProfileIncomplete(
+        !isProfileComplete({
+          full_name: p?.full_name as string | null,
+          role: p?.role as string | null,
+          aadhaar_status: p?.aadhaar_status as string | null,
+          experience_years: p?.experience_years as number | null,
+          cities: p?.cities as string[] | null,
+          skills: p?.skills as string[] | null,
+          work_experience_rows: expCount.count ?? 0,
+        }),
+      );
     };
 
     load();
@@ -147,6 +154,7 @@ export function WorkerSidebar({ onNavigate }: { onNavigate?: () => void }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'applicants', filter: `worker_id=eq.${user.id}` }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'worker_profiles', filter: `worker_id=eq.${user.id}` }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'work_experience', filter: `worker_id=eq.${user.id}` }, () => load())
       .subscribe();
 
     return () => {

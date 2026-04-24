@@ -12,8 +12,10 @@ interface FormState {
   phone: string;
   notifyApplicants: boolean;
   notifyWhatsapp: boolean;
-  language: 'English' | 'Hindi';
+  languages: string[];
 }
+
+const LANGUAGE_OPTIONS = ['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam'];
 
 const EMPTY: FormState = {
   fullName: '',
@@ -21,7 +23,7 @@ const EMPTY: FormState = {
   phone: '',
   notifyApplicants: true,
   notifyWhatsapp: true,
-  language: 'English',
+  languages: ['English'],
 };
 
 export function OwnerProfileForm() {
@@ -39,13 +41,20 @@ export function OwnerProfileForm() {
     let cancelled = false;
 
     const hydrate = (profile: Record<string, unknown> | null, authEmail: string, metaName: string) => {
+      const langArr = profile?.languages as string[] | null;
+      const legacy = profile?.language as string | null;
+      const languages = (langArr && langArr.length > 0)
+        ? langArr
+        : legacy
+          ? [legacy]
+          : ['English'];
       const next: FormState = {
         fullName: (profile?.full_name as string | null) ?? metaName,
         email: (profile?.email as string | null) ?? authEmail,
         phone: (profile?.phone as string | null) ?? '',
         notifyApplicants: (profile?.notify_applicants as boolean | null) ?? true,
         notifyWhatsapp: (profile?.notify_whatsapp as boolean | null) ?? true,
-        language: ((profile?.language as FormState['language'] | null) ?? 'English'),
+        languages,
       };
       setForm(next);
       setSaved(next);
@@ -96,7 +105,9 @@ export function OwnerProfileForm() {
       phone: form.phone,
       notify_applicants: form.notifyApplicants,
       notify_whatsapp: form.notifyWhatsapp,
-      language: form.language,
+      languages: form.languages,
+      // Keep legacy column populated with the first pick for any older code
+      language: form.languages[0] ?? 'English',
       updated_at: new Date().toISOString(),
     };
     const { error } = await supabase.from('profiles').upsert(row, { onConflict: 'owner_id' });
@@ -184,18 +195,27 @@ export function OwnerProfileForm() {
         </div>
 
         <div className="form-section">
-          <h3>Language</h3>
+          <h3>Languages</h3>
           <div className="lang-toggle">
-            {(['English', 'Hindi'] as const).map((l) => (
-              <button
-                key={l}
-                type="button"
-                className={`lang-opt${form.language === l ? ' active' : ''}`}
-                onClick={() => update({ language: l })}
-              >
-                {l}
-              </button>
-            ))}
+            {LANGUAGE_OPTIONS.map((l) => {
+              const picked = form.languages.includes(l);
+              return (
+                <button
+                  key={l}
+                  type="button"
+                  className={`lang-opt${picked ? ' active' : ''}`}
+                  onClick={() => {
+                    const next = picked
+                      ? form.languages.filter((x) => x !== l)
+                      : [...form.languages, l];
+                    // Always keep at least one language selected
+                    update({ languages: next.length === 0 ? [l] : next });
+                  }}
+                >
+                  {l}
+                </button>
+              );
+            })}
           </div>
         </div>
 

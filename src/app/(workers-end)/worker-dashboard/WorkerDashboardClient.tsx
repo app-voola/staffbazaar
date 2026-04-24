@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useWorkerI18n } from '@/contexts/WorkerI18nContext';
 import { supabase } from '@/lib/supabase';
 import { applyToJob } from '@/lib/worker-apply';
+import { completionPercent } from '@/lib/worker-profile-completion';
 
 interface JobRow {
   id: string;
@@ -78,7 +79,7 @@ export function WorkerDashboardClient() {
     let cancelled = false;
 
     const load = async () => {
-      const [apps, convs, profile, jobsRes, appsJobs] = await Promise.all([
+      const [apps, convs, profile, jobsRes, appsJobs, expCount] = await Promise.all([
         supabase.from('applicants').select('stage').eq('worker_id', user.id),
         supabase.from('conversations').select('unread').eq('worker_id', user.id),
         supabase.from('worker_profiles').select('*').eq('worker_id', user.id).maybeSingle(),
@@ -89,6 +90,7 @@ export function WorkerDashboardClient() {
           .order('created_at', { ascending: false })
           .limit(6),
         supabase.from('applicants').select('job_id').eq('worker_id', user.id),
+        supabase.from('work_experience').select('id', { count: 'exact', head: true }).eq('worker_id', user.id),
       ]);
       if (cancelled) return;
 
@@ -102,12 +104,15 @@ export function WorkerDashboardClient() {
 
       const p = profile.data as Record<string, unknown> | null;
       setWorkingStatus(p?.looking_for_work === false);
-      const fields = ['full_name', 'role', 'experience_years', 'city', 'phone', 'bio', 'salary_expected'];
-      const filled = p ? fields.filter((f) => {
-        const v = p[f];
-        return v !== null && v !== undefined && v !== '' && v !== 0;
-      }).length : 0;
-      const profileComplete = Math.round((filled / fields.length) * 100);
+      const profileComplete = completionPercent({
+        full_name: p?.full_name as string | null,
+        role: p?.role as string | null,
+        aadhaar_status: p?.aadhaar_status as string | null,
+        experience_years: p?.experience_years as number | null,
+        cities: p?.cities as string[] | null,
+        skills: p?.skills as string[] | null,
+        work_experience_rows: expCount.count ?? 0,
+      });
 
       setStats({
         applications: stageRows.length,
@@ -150,6 +155,7 @@ export function WorkerDashboardClient() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'applicants', filter: `worker_id=eq.${user.id}` }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations', filter: `worker_id=eq.${user.id}` }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'worker_profiles', filter: `worker_id=eq.${user.id}` }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'work_experience', filter: `worker_id=eq.${user.id}` }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, () => load())
       .subscribe();
 
@@ -390,29 +396,7 @@ export function WorkerDashboardClient() {
             </div>
           )}
 
-          {stats.profileComplete < 100 && (
-            <div className="attention-card">
-              <div className="attention-icon green">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-              </div>
-              <div className="attention-body">
-                <div className="attention-title">{t('attn_complete_profile')}</div>
-                <div className="attention-sub">{t('attn_complete_profile_sub')}</div>
-              </div>
-              <Link href="/worker-profile" className="attention-btn green-btn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                  <polyline points="22 4 12 14.01 9 11.01" />
-                </svg>
-                <span>{t('btn_complete')}</span>
-              </Link>
-            </div>
-          )}
-
-          {!loading && stats.shortlisted === 0 && stats.unreadMessages === 0 && stats.profileComplete >= 100 && (
+          {!loading && stats.shortlisted === 0 && stats.unreadMessages === 0 && (
             <div className="attention-card">
               <div className="attention-icon green">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

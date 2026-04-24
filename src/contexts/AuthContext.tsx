@@ -11,7 +11,7 @@ import {
 } from 'react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { mockRestaurant, type MockUser, type MockRestaurant } from '@/services/mock';
+import { type MockUser, type MockRestaurant } from '@/services/mock';
 
 interface AuthContextValue {
   user: MockUser | null;
@@ -48,20 +48,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
 
+    const loadRestaurant = async (ownerId: string): Promise<MockRestaurant | null> => {
+      const { data, error } = await supabase
+        .from('restaurants')
+        .select('id, owner_id, name, type, city')
+        .eq('owner_id', ownerId)
+        .maybeSingle();
+      if (error) {
+        console.error('[auth] restaurant load failed', error);
+        return null;
+      }
+      if (!data) return null;
+      return {
+        id: data.id,
+        owner_id: data.owner_id,
+        name: data.name ?? '',
+        type: data.type ?? '',
+        city: data.city ?? '',
+      };
+    };
+
     (async () => {
       const { data, error } = await supabase.auth.getSession();
       if (cancelled) return;
       if (error) console.error('[auth] getSession failed', error);
       const mock = toMockUser(data.session?.user ?? null);
       setUser(mock);
-      setRestaurant(mock ? mockRestaurant : null);
+      const rest = mock ? await loadRestaurant(mock.id) : null;
+      if (cancelled) return;
+      setRestaurant(rest);
       setLoading(false);
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const mock = toMockUser(session?.user ?? null);
       setUser(mock);
-      setRestaurant(mock ? mockRestaurant : null);
+      const rest = mock ? await loadRestaurant(mock.id) : null;
+      setRestaurant(rest);
     });
 
     return () => {
@@ -69,6 +92,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sub.subscription.unsubscribe();
     };
   }, []);
+
+  // Keep the restaurant in sync when the owner edits their profile
+  useEffect(() => {
+    if (!user) return;
+    const ch = supabase
+      .channel(`auth-restaurant-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'restaurants', filter: `owner_id=eq.${user.id}` },
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            setRestaurant(null);
+            return;
+          }
+          const row = payload.new as Record<string, unknown>;
+          setRestaurant({
+            id: (row.id as string) ?? '',
+            owner_id: (row.owner_id as string) ?? user.id,
+            name: (row.name as string) ?? '',
+            type: (row.type as string) ?? '',
+            city: (row.city as string) ?? '',
+          });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [user?.id]);
 
   const login = useCallback(async () => {
     // Sessions are managed by supabase.auth directly (see login page).

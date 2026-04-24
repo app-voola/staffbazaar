@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useWorkerI18n } from '@/contexts/WorkerI18nContext';
 import { supabase } from '@/lib/supabase';
 import type { TranslationKey } from '@/lib/worker-translations';
+import { completionPercent } from '@/lib/worker-profile-completion';
 
 type Tab = 'profile' | 'aadhaar' | 'work' | 'cities' | 'notifications';
 type AadhaarStatus = 'none' | 'uploaded' | 'verified';
@@ -158,9 +159,12 @@ export function WorkerProfileClient() {
   const [aadhaarFile, setAadhaarFile] = useState<File | null>(null);
   const [aadhaarError, setAadhaarError] = useState('');
   const [aadhaarSubmitting, setAadhaarSubmitting] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const aadhaarCameraRef = useRef<HTMLInputElement>(null);
   const aadhaarGalleryRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -251,16 +255,18 @@ export function WorkerProfileClient() {
     update({ cities: allSelected ? [] : [...CITIES] });
   };
 
-  const completion = useMemo(() => {
-    const checks = [
-      !!form.full_name.trim(),
-      form.aadhaar_status !== 'none',
-      experience.some((e) => e.job_title.trim()),
-      form.cities.length > 0,
-      /chef|cook/i.test(form.role) ? form.skills.length > 0 : true,
-    ];
-    return Math.round((checks.filter(Boolean).length / checks.length) * 100);
-  }, [form, experience]);
+  const completion = useMemo(
+    () =>
+      completionPercent({
+        full_name: form.full_name,
+        role: form.role,
+        aadhaar_status: form.aadhaar_status,
+        cities: form.cities,
+        skills: form.skills,
+        work_experience_rows: experience.filter((e) => e.job_title.trim()).length,
+      }),
+    [form, experience],
+  );
 
   const missing = useMemo(() => {
     const m: string[] = [];
@@ -434,6 +440,74 @@ export function WorkerProfileClient() {
     reader.readAsDataURL(file);
   };
 
+  const stopCamera = () => {
+    const stream = cameraStreamRef.current;
+    if (stream) {
+      stream.getTracks().forEach((t) => t.stop());
+      cameraStreamRef.current = null;
+    }
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraActive(false);
+  };
+
+  const startCamera = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      // No camera API (desktop w/o webcam, old browser) — fall back to file picker
+      aadhaarCameraRef.current?.click();
+      return;
+    }
+    setAadhaarError('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+        audio: false,
+      });
+      cameraStreamRef.current = stream;
+      setCameraActive(true);
+      // Assign on next tick so the <video> element is mounted
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      }, 0);
+    } catch (err) {
+      console.error('[aadhaar] camera start failed', err);
+      setAadhaarError('Could not access camera. Use "From Gallery" instead.');
+      setCameraActive(false);
+    }
+  };
+
+  const capturePhoto = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    const w = video.videoWidth || 1280;
+    const h = video.videoHeight || 720;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, w, h);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return;
+        const file = new File([blob], `aadhaar-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        setAadhaarFile(file);
+        setAadhaarPreview(canvas.toDataURL('image/jpeg', 0.9));
+        stopCamera();
+      },
+      'image/jpeg',
+      0.9,
+    );
+  };
+
+  // Clean up camera when modal closes or component unmounts
+  useEffect(() => {
+    if (!aadhaarModalOpen) stopCamera();
+  }, [aadhaarModalOpen]);
+  useEffect(() => () => stopCamera(), []);
+
   const submitAadhaar = async () => {
     if (!user || !aadhaarFile) return;
     setAadhaarSubmitting(true);
@@ -476,12 +550,14 @@ export function WorkerProfileClient() {
   }
 
   const isChef = /chef|cook/i.test(form.role);
+  // Short labels so the nav-pill doesn't overflow past the sidebar width.
+  // The full status text still appears inside the Aadhaar panel.
   const aadhaarBadge: { label: string; cls: string } =
     form.aadhaar_status === 'verified'
-      ? { label: t('aadhaar_verified'), cls: 'ok' }
+      ? { label: 'Verified', cls: 'ok' }
       : form.aadhaar_status === 'uploaded'
-        ? { label: t('aadhaar_uploaded_review'), cls: 'warn' }
-        : { label: t('aadhaar_not_uploaded'), cls: 'warn' };
+        ? { label: 'In Review', cls: 'warn' }
+        : { label: 'Missing', cls: 'warn' };
 
   return (
     <div className="sb-page-wrap">
@@ -1028,12 +1104,37 @@ export function WorkerProfileClient() {
               Our team will check it for you.
             </p>
 
-            {!aadhaarPreview ? (
+            {cameraActive ? (
+              <div className="aadhaar-camera">
+                {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                <video ref={videoRef} autoPlay playsInline muted />
+                <div className="camera-actions">
+                  <button
+                    type="button"
+                    className="retake-link"
+                    onClick={stopCamera}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-capture"
+                    onClick={capturePhoto}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="13" r="4" />
+                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    </svg>
+                    Capture
+                  </button>
+                </div>
+              </div>
+            ) : !aadhaarPreview ? (
               <div className="aadhaar-upload-pickers">
                 <button
                   type="button"
                   className="aadhaar-pick-btn"
-                  onClick={() => aadhaarCameraRef.current?.click()}
+                  onClick={startCamera}
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
@@ -1139,7 +1240,7 @@ export function WorkerProfileClient() {
         .ep-nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
         .ep-nav-item:hover { background: var(--cream); color: var(--charcoal); }
         .ep-nav-item.active { background: var(--ember-glow); color: var(--ember); }
-        .ep-nav-badge { margin-left: auto; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 100px; text-transform: uppercase; letter-spacing: 0.4px; }
+        .ep-nav-badge { margin-left: auto; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 100px; text-transform: uppercase; letter-spacing: 0.4px; max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
         .ep-nav-badge.ok { background: rgba(16,185,129,0.14); color: #047857; }
         .ep-nav-badge.warn { background: #FEF3C7; color: #92400E; }
         @media (max-width: 768px) { .ep-nav-badge { display: none; } }
@@ -1274,6 +1375,12 @@ export function WorkerProfileClient() {
 
         .aadhaar-preview { border: 1.5px solid var(--sand); border-radius: var(--radius-md); padding: 10px; background: var(--cream); margin-bottom: 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
         .aadhaar-preview img { max-width: 100%; max-height: 240px; border-radius: var(--radius-sm); object-fit: contain; background: white; }
+        .aadhaar-camera { border: 1.5px solid var(--sand); border-radius: var(--radius-md); padding: 10px; background: black; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; }
+        .aadhaar-camera video { width: 100%; max-height: 320px; border-radius: var(--radius-sm); object-fit: cover; background: black; }
+        .aadhaar-camera .camera-actions { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 0 4px; }
+        .btn-capture { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 100px; background: var(--ember); color: white; border: none; font-family: var(--font-body); font-size: 14px; font-weight: 700; cursor: pointer; }
+        .btn-capture:hover { background: #C7421A; }
+        .btn-capture svg { width: 16px; height: 16px; }
         .retake-link { font-size: 13px; font-weight: 700; color: var(--ember); background: none; border: none; cursor: pointer; padding: 4px 8px; font-family: var(--font-body); }
         .retake-link:hover { text-decoration: underline; }
 

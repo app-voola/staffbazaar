@@ -2,11 +2,16 @@
 
 import Link from 'next/link';
 import { useJobs } from '@/contexts/JobsContext';
+import { useApplicants } from '@/contexts/ApplicantsContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { KanbanBoard } from '@/components/applicants/KanbanBoard';
 
 export function JobApplicantsClient({ jobId }: { jobId: string }) {
   const { jobs } = useJobs();
+  const { byJob } = useApplicants();
+  const { restaurant } = useAuth();
   const job = jobs.find((j) => j.id === jobId);
+  const applicantCount = byJob(jobId).length;
 
   if (!job) {
     return (
@@ -45,10 +50,13 @@ export function JobApplicantsClient({ jobId }: { jobId: string }) {
 
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 28 }}>
-          {job.title} — Spice Garden
+          {job.title}
+          {restaurant?.name ? ` — ${restaurant.name}` : ''}
         </h1>
         <div style={{ fontSize: 13, color: 'var(--stone)', marginTop: 2 }}>
-          Posted {job.postedDaysAgo} days ago · {job.applicants} applicants · {job.views} views
+          Posted {job.postedDaysAgo === 0 ? 'today' : `${job.postedDaysAgo} day${job.postedDaysAgo === 1 ? '' : 's'} ago`}
+          {' · '}
+          {applicantCount} applicant{applicantCount === 1 ? '' : 's'}
         </div>
       </div>
 

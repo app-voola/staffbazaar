@@ -43,7 +43,14 @@ type JobRow = {
   job_type: string | null;
   tips: boolean | null;
   description: string | null;
+  created_at: string | null;
 };
+
+function daysSince(iso: string | null | undefined): number {
+  if (!iso) return 0;
+  const ms = Date.now() - new Date(iso).getTime();
+  return Math.max(0, Math.floor(ms / 86_400_000));
+}
 
 function rowToJob(r: JobRow): MockJob {
   return {
@@ -54,7 +61,9 @@ function rowToJob(r: JobRow): MockJob {
     applicants: r.applicants,
     newToday: r.new_today,
     views: r.views,
-    postedDaysAgo: r.posted_days_ago,
+    // Compute from created_at when available so the counter isn't frozen at
+    // the posted_days_ago value that was captured when the row was inserted.
+    postedDaysAgo: r.created_at ? daysSince(r.created_at) : r.posted_days_ago,
     salaryMin: r.salary_min,
     salaryMax: r.salary_max,
     shift: r.shift ?? '',

@@ -25,6 +25,21 @@ interface JobRow {
 const PLACEHOLDER_IMG =
   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&q=60';
 
+const CITY_OPTIONS = [
+  'Mumbai',
+  'Delhi NCR',
+  'Bangalore',
+  'Pune',
+  'Hyderabad',
+  'Chennai',
+  'Kolkata',
+  'Goa',
+  'Jaipur',
+  'Ahmedabad',
+  'Lucknow',
+  'Chandigarh',
+];
+
 function formatSalary(min: number, max: number): string {
   if (!min && !max) return '';
   const fmt = (n: number) => `₹${n.toLocaleString('en-IN')}`;
@@ -51,6 +66,8 @@ export function FindJobsClient() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [city, setCity] = useState('');
+  const [salaryExpected, setSalaryExpected] = useState<number | null>(null);
+  const [matchSalary, setMatchSalary] = useState(true);
   const [toast, setToast] = useState('');
 
   useEffect(() => {
@@ -59,7 +76,7 @@ export function FindJobsClient() {
 
     const load = async () => {
       setLoading(true);
-      const [{ data: jobRows }, savedRes, appsRes] = await Promise.all([
+      const [{ data: jobRows }, savedRes, appsRes, profileRes] = await Promise.all([
         supabase
           .from('jobs')
           .select('id, title, role, salary_min, salary_max, shift, job_type, owner_id, created_at')
@@ -67,8 +84,11 @@ export function FindJobsClient() {
           .order('created_at', { ascending: false }),
         supabase.from('saved_jobs').select('job_id').eq('worker_id', user.id),
         supabase.from('applicants').select('job_id').eq('worker_id', user.id),
+        supabase.from('worker_profiles').select('salary_expected').eq('worker_id', user.id).maybeSingle(),
       ]);
       if (cancelled) return;
+
+      setSalaryExpected((profileRes.data?.salary_expected as number | null) ?? null);
 
       const ownerIds = Array.from(new Set((jobRows ?? []).map((j) => j.owner_id)));
       const restMap: Record<string, { name: string; city: string; cover_image: string | null }> = {};
@@ -113,8 +133,12 @@ export function FindJobsClient() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const c = city.trim().toLowerCase();
+    // Salary match: job's max must cover at least 70% of worker's expected pay.
+    // Keeps some flexibility for negotiation while dropping obviously underpaid posts.
+    const salaryFloor = salaryExpected && matchSalary ? salaryExpected * 0.7 : null;
     return jobs.filter((j) => {
       if (c && !(j.restaurant_city ?? '').toLowerCase().includes(c)) return false;
+      if (salaryFloor !== null && (j.salary_max || 0) < salaryFloor) return false;
       if (!q) return true;
       return (
         j.title.toLowerCase().includes(q) ||
@@ -122,7 +146,7 @@ export function FindJobsClient() {
         (j.restaurant_name ?? '').toLowerCase().includes(q)
       );
     });
-  }, [jobs, query, city]);
+  }, [jobs, query, city, salaryExpected, matchSalary]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -187,9 +211,29 @@ export function FindJobsClient() {
             value={city}
             onChange={(e) => setCity(e.target.value)}
             placeholder={t('search_city_placeholder')}
+            list="city-options"
+            autoComplete="off"
           />
+          <datalist id="city-options">
+            {CITY_OPTIONS.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
         </div>
       </div>
+
+      {salaryExpected ? (
+        <label className="salary-match-toggle">
+          <input
+            type="checkbox"
+            checked={matchSalary}
+            onChange={(e) => setMatchSalary(e.target.checked)}
+          />
+          <span>
+            Match my salary (≥ ₹{Math.round(salaryExpected * 0.7).toLocaleString('en-IN')}/mo)
+          </span>
+        </label>
+      ) : null}
 
       {loading ? (
         <div className="tab-empty">
@@ -285,6 +329,8 @@ export function FindJobsClient() {
         .sb-page-head h1 em { color: var(--ember); font-style: italic; }
         .page-sub { color: var(--charcoal-light); font-size: 14px; margin-top: 4px; }
 
+        .salary-match-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--charcoal-light); font-weight: 600; cursor: pointer; margin-bottom: 16px; }
+        .salary-match-toggle input { accent-color: var(--ember); width: 16px; height: 16px; cursor: pointer; }
         .search-bar { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 24px; }
         @media (max-width: 700px) { .search-bar { grid-template-columns: 1fr; } }
         .search-field { position: relative; }
