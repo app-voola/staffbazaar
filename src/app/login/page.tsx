@@ -20,19 +20,34 @@ export default function LoginPage() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('sb_role', r);
     }
-    // Show the password form immediately. If a real session already exists,
-    // redirect to the dashboard in the background so we never sit on the
-    // role picker because of a slow/blocked auth check.
-    setStep('form');
+    // Workers default to the signup/create-profile flow since most people
+    // clicking "I'm looking for work" are new. Returning workers reach the
+    // password form via the "Already have an account? Log in" link on
+    // signup, or by visiting /login directly. Owners still see the login
+    // form since that's the existing flow.
+    //
+    // If a real session already exists, short-circuit to the right
+    // dashboard regardless of role.
     supabase.auth
       .getSession()
       .then(({ data: sess }) => {
         const isReal = !!sess.session && !sess.session.user.is_anonymous;
         if (isReal) {
           window.location.href = r === 'worker' ? '/worker-dashboard' : '/dashboard';
+          return;
         }
+        if (r === 'worker') {
+          window.location.href = '/signup';
+          return;
+        }
+        setStep('form');
       })
-      .catch((err) => console.error('[login] getSession failed', err));
+      .catch((err) => {
+        console.error('[login] getSession failed', err);
+        // Fall back to the same behaviour as "no session"
+        if (r === 'worker') window.location.href = '/signup';
+        else setStep('form');
+      });
   };
 
   const signIn = async (e: React.FormEvent) => {
@@ -58,22 +73,38 @@ export default function LoginPage() {
       return;
     }
 
-    // If a worker signs in but hasn't finished the onboarding wizard yet
-    // (no full_name or no role/city saved), push them back into it so
-    // they don't land on an empty dashboard.
-    if (role === 'worker' && signInData.user) {
-      const { data: profile } = await supabase
-        .from('worker_profiles')
-        .select('full_name, role, cities')
-        .eq('worker_id', signInData.user.id)
-        .maybeSingle();
-      const done =
-        !!profile &&
-        !!(profile.full_name as string | null)?.trim() &&
-        !!(profile.role as string | null) &&
-        Array.isArray(profile.cities) &&
-        (profile.cities as string[]).length > 0;
-      window.location.href = done ? '/worker-dashboard' : '/create-profile';
+    // Decide where to go by checking which profile row exists for this
+    // user rather than trusting the pre-selected role card — that way
+    // someone who clicked "Log in" without picking a role still ends up
+    // in the right place, and workers mid-onboarding get routed back to
+    // the create-profile wizard instead of an empty dashboard.
+    if (signInData.user) {
+      const [{ data: workerProfile }, { data: ownerProfile }] = await Promise.all([
+        supabase
+          .from('worker_profiles')
+          .select('full_name, role, cities')
+          .eq('worker_id', signInData.user.id)
+          .maybeSingle(),
+        supabase
+          .from('profiles')
+          .select('owner_id')
+          .eq('owner_id', signInData.user.id)
+          .maybeSingle(),
+      ]);
+      const isOwner =
+        !!ownerProfile ||
+        (signInData.user.user_metadata as { role?: string } | null)?.role === 'owner';
+      if (isOwner) {
+        window.location.href = '/dashboard';
+        return;
+      }
+      const workerDone =
+        !!workerProfile &&
+        !!(workerProfile.full_name as string | null)?.trim() &&
+        !!(workerProfile.role as string | null) &&
+        Array.isArray(workerProfile.cities) &&
+        (workerProfile.cities as string[]).length > 0;
+      window.location.href = workerDone ? '/worker-dashboard' : '/create-profile';
       return;
     }
 
@@ -106,7 +137,7 @@ export default function LoginPage() {
         {step === 'role' ? (
           <>
             <h1 className="auth-heading">Welcome to StaffBazaar</h1>
-            <p className="auth-sub">Tell us who you are</p>
+            <p className="auth-sub">Get started — tell us who you are</p>
 
             <div className="option-grid role-cards">
               <button
@@ -165,7 +196,14 @@ export default function LoginPage() {
             </div>
 
             <p className="auth-footer">
-              Don&apos;t have an account? <Link href="/signup">Sign up for free</Link>
+              Already have an account?{' '}
+              <button
+                type="button"
+                className="inline-link-btn"
+                onClick={() => { setRole('owner'); setStep('form'); }}
+              >
+                Log in
+              </button>
             </p>
           </>
         ) : (
@@ -314,8 +352,8 @@ export default function LoginPage() {
         .btn-social:hover { border-color: var(--charcoal-light); background: var(--cream); }
         .btn-social svg { width: 20px; height: 20px; }
         .auth-footer { text-align: center; margin-top: 28px; font-size: 14px; color: var(--charcoal-light); }
-        .auth-footer a { color: var(--ember); font-weight: 700; text-decoration: none; }
-        .auth-footer a:hover { text-decoration: underline; }
+        .auth-footer a, .inline-link-btn { color: var(--ember); font-weight: 700; text-decoration: none; background: none; border: none; padding: 0; cursor: pointer; font-family: var(--font-body); font-size: inherit; }
+        .auth-footer a:hover, .inline-link-btn:hover { text-decoration: underline; }
         @media (max-width: 480px) {
           .auth-card { padding: 32px 24px; border-radius: var(--radius-md); }
           .auth-heading { font-size: 26px; }
