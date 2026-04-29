@@ -2,14 +2,6 @@
 
 import type { WizardData } from './types';
 
-const SHIFT_LABEL: Record<NonNullable<WizardData['shift']>, string> = {
-  morning: 'Morning (7am - 3pm)',
-  evening: 'Evening (3pm - 11pm)',
-  night: 'Night (11pm - 7am)',
-  split: 'Split Shift (Flexible)',
-  '': 'Not set',
-};
-
 export function ReviewStep({
   data,
   onPublish,
@@ -50,7 +42,7 @@ export function ReviewStep({
         </div>
         <div className="review-row">
           <div className="review-label">Shift</div>
-          <div className="review-value">{SHIFT_LABEL[data.shift]}</div>
+          <div className="review-value">{data.shift || 'Not set'}</div>
         </div>
         <div className="review-row">
           <div className="review-label">Job Type</div>

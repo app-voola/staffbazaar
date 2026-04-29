@@ -104,7 +104,7 @@ export function WorkerSidebar({ onNavigate }: { onNavigate?: () => void }) {
     const load = async () => {
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const [convs, notifs, saved, newJobs, apps, profile, expCount] = await Promise.all([
-        supabase.from('conversations').select('unread').eq('worker_id', user.id),
+        supabase.from('conversations').select('unread, unread_for_worker').eq('worker_id', user.id),
         supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('read', false),
         supabase.from('saved_jobs').select('job_id', { count: 'exact', head: true }).eq('worker_id', user.id),
         supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'active').gte('created_at', twentyFourHoursAgo),
@@ -115,7 +115,8 @@ export function WorkerSidebar({ onNavigate }: { onNavigate?: () => void }) {
       if (cancelled) return;
 
       const msgTotal = (convs.data ?? []).reduce(
-        (sum: number, c: { unread?: number }) => sum + (c.unread ?? 0),
+        (sum: number, c: { unread?: number | null; unread_for_worker?: number | null }) =>
+          sum + (c.unread_for_worker ?? c.unread ?? 0),
         0,
       );
       setUnreadMessages(msgTotal);

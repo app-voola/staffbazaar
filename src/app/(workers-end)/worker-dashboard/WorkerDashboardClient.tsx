@@ -81,7 +81,7 @@ export function WorkerDashboardClient() {
     const load = async () => {
       const [apps, convs, profile, jobsRes, appsJobs, expCount] = await Promise.all([
         supabase.from('applicants').select('stage').eq('worker_id', user.id),
-        supabase.from('conversations').select('unread').eq('worker_id', user.id),
+        supabase.from('conversations').select('unread, unread_for_worker').eq('worker_id', user.id),
         supabase.from('worker_profiles').select('*').eq('worker_id', user.id).maybeSingle(),
         supabase
           .from('jobs')
@@ -98,7 +98,8 @@ export function WorkerDashboardClient() {
       const replies = stageRows.filter((r) => r.stage !== 'applied').length;
       const shortlisted = stageRows.filter((r) => r.stage === 'shortlisted' || r.stage === 'called').length;
       const unreadMessages = (convs.data ?? []).reduce(
-        (sum: number, c: { unread?: number }) => sum + (c.unread ?? 0),
+        (sum: number, c: { unread?: number | null; unread_for_worker?: number | null }) =>
+          sum + (c.unread_for_worker ?? c.unread ?? 0),
         0,
       );
 

@@ -98,6 +98,16 @@ export function OwnerProfileForm() {
 
   const onSave = async () => {
     if (!user) return;
+    if (!form.fullName.trim()) {
+      setToast('Full name is required');
+      setTimeout(() => setToast(''), 2500);
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      setToast('Enter a valid email address');
+      setTimeout(() => setToast(''), 2500);
+      return;
+    }
     const row = {
       owner_id: user.id,
       full_name: form.fullName,
@@ -140,7 +150,7 @@ export function OwnerProfileForm() {
         <div className="form-section">
           <h3>Basic Information</h3>
           <div className="field">
-            <label>Full Name</label>
+            <label>Full Name <span className="req-mark">*</span></label>
             <input
               value={form.fullName}
               placeholder="Your full name"
@@ -157,7 +167,7 @@ export function OwnerProfileForm() {
               />
             </div>
             <div className="field">
-              <label>Email</label>
+              <label>Email <span className="req-mark">*</span></label>
               <input
                 type="email"
                 value={form.email}
@@ -244,6 +254,7 @@ export function OwnerProfileForm() {
 
       <style>{`
         .profile-content { max-width: 700px; padding-bottom: 80px; }
+        .req-mark { color: var(--ember); font-weight: 700; }
         .form-section { margin-bottom: 36px; }
         .form-section h3 { font-family: var(--font-display); font-size: 20px; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--sand); }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }

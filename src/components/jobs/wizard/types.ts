@@ -4,7 +4,7 @@ export interface WizardData {
   description: string;
   salaryMin: string;
   salaryMax: string;
-  shift: 'morning' | 'evening' | 'night' | 'split' | '';
+  shift: string;
   jobType: 'Full-time' | 'Part-time' | 'Contract';
   tips: boolean;
 }

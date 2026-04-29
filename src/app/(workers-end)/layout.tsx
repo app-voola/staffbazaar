@@ -35,9 +35,10 @@ export default function WorkersEndLayout({ children }: { children: ReactNode }) 
       .then(() => {});
   }, [user?.id]);
 
-  // Route workers who haven't finished the create-profile wizard back
-  // to it. Skip the guard on the wizard itself and on the full worker
-  // edit-profile page so they can finish there too.
+  // Bounce workers who never finished the create-profile wizard back
+  // into it — but only if the worker_profiles row says onboarding_complete
+  // is false. Once true, we never redirect again, even if the worker
+  // later clears a field on the full editor.
   useEffect(() => {
     if (!user) return;
     const exempt = pathname?.startsWith('/create-profile') || pathname?.startsWith('/worker-profile');
@@ -45,18 +46,23 @@ export default function WorkersEndLayout({ children }: { children: ReactNode }) 
     let cancelled = false;
     supabase
       .from('worker_profiles')
-      .select('full_name, role, cities')
+      .select('onboarding_complete, full_name, role, cities')
       .eq('worker_id', user.id)
       .maybeSingle()
       .then(({ data }) => {
         if (cancelled) return;
-        const done =
+        if (data?.onboarding_complete === true) return;
+        // Fallback for accounts created before the column existed: treat
+        // a populated profile as already onboarded so we don't bounce
+        // existing users to the wizard.
+        const looksDone =
           !!data &&
           !!(data.full_name as string | null)?.trim() &&
           !!(data.role as string | null) &&
           Array.isArray(data.cities) &&
           (data.cities as string[]).length > 0;
-        if (!done) router.replace('/create-profile');
+        if (looksDone) return;
+        router.replace('/create-profile');
       });
     return () => {
       cancelled = true;

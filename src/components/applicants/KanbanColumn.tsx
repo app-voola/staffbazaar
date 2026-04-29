@@ -48,9 +48,12 @@ export function KanbanColumn({
       {children}
 
       <style>{`
-        .kanban-column { min-width: 280px; max-width: 320px; flex-shrink: 0; background: var(--cream); border-radius: var(--radius-lg); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+        .kanban-column { width: 280px; flex-shrink: 0; background: var(--cream); border-radius: var(--radius-lg); padding: 16px; display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 220px); overflow-y: auto; }
+        .kanban-column::-webkit-scrollbar { width: 6px; }
+        .kanban-column::-webkit-scrollbar-track { background: transparent; }
+        .kanban-column::-webkit-scrollbar-thumb { background: var(--sand); border-radius: 100px; }
         .kanban-column.drop-target { background: var(--ember-glow); outline: 2px dashed var(--ember); outline-offset: -6px; }
-        .kanban-column-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 1.5px solid var(--sand); }
+        .kanban-column-header { position: sticky; top: 0; background: var(--cream); display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 1.5px solid var(--sand); z-index: 1; }
         .kanban-column-header h3 { font-family: var(--font-body); font-size: 14px; font-weight: 700; color: var(--charcoal); }
         .kanban-count { padding: 2px 8px; border-radius: 100px; font-size: 11px; font-weight: 700; }
         .kanban-count.blue { background: var(--blue-light); color: var(--blue); }

@@ -4,6 +4,7 @@ export interface MockMessage {
   text: string;
   time: string;
   createdAt?: string;
+  readAt?: string;
 }
 
 export interface MockConversation {

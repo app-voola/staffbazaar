@@ -6,7 +6,6 @@ export function VerificationSideCard({ profile }: { profile: WorkerProfileDetail
   const items = [
     { ok: profile.verifications.aadhaar, label: 'Aadhaar Verified', sub: 'Identity confirmed' },
     { ok: profile.verifications.phone, label: 'Phone Verified', sub: 'Number confirmed' },
-    { ok: profile.verifications.background, label: 'Background Check', sub: 'Not yet completed' },
   ];
 
   return (

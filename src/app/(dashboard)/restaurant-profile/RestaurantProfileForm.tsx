@@ -166,8 +166,26 @@ export function RestaurantProfileForm() {
       hours: { ...f.hours, [day]: { ...f.hours[day], [field]: value } },
     }));
 
+  const validateRequired = (): string | null => {
+    if (!form.name.trim()) return 'Restaurant name is required';
+    if (form.cuisines.length === 0) return 'Pick at least one cuisine type';
+    if (!form.address.trim()) return 'Full address is required';
+    if (!form.city.trim()) return 'City is required';
+    if (!/^\d{6}$/.test(form.pin)) return 'Enter a valid 6-digit PIN code';
+    const hasHours = DAYS.some((d) => form.hours[d.key].open && form.hours[d.key].close);
+    if (!hasHours) return 'Set operating hours for at least one day';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return 'Enter a valid contact email';
+    return null;
+  };
+
   const onSave = async () => {
     if (!user) return;
+    const validationErr = validateRequired();
+    if (validationErr) {
+      setToast(validationErr);
+      setTimeout(() => setToast(''), 3000);
+      return;
+    }
     const row = {
       owner_id: user.id,
       name: form.name,
@@ -360,7 +378,7 @@ export function RestaurantProfileForm() {
           <h3>Business Information</h3>
           <div className="form-row">
             <div className="field">
-              <label>Restaurant Name</label>
+              <label>Restaurant Name <span className="req-mark">*</span></label>
               <input
                 value={form.name}
                 placeholder="Your restaurant name"
@@ -390,7 +408,7 @@ export function RestaurantProfileForm() {
             />
           </div>
 
-          <label className="section-label">Cuisine Types</label>
+          <label className="section-label">Cuisine Types <span className="req-mark">*</span></label>
           <div className="chip-selector">
             {CUISINE_OPTIONS.map((c) => {
               const active = form.cuisines.includes(c);
@@ -444,7 +462,7 @@ export function RestaurantProfileForm() {
         <div className="form-section">
           <h3>Location</h3>
           <div className="field">
-            <label>Full Address</label>
+            <label>Full Address <span className="req-mark">*</span></label>
             <textarea
               rows={2}
               placeholder="Shop number, street, locality"
@@ -454,7 +472,7 @@ export function RestaurantProfileForm() {
           </div>
           <div className="form-row">
             <div className="field">
-              <label>City</label>
+              <label>City <span className="req-mark">*</span></label>
               <select value={form.city} onChange={(e) => update({ city: e.target.value })}>
                 {['Mumbai', 'Delhi NCR', 'Bangalore', 'Hyderabad', 'Chennai', 'Kolkata', 'Pune', 'Ahmedabad', 'Jaipur', 'Goa'].map((c) => (
                   <option key={c}>{c}</option>
@@ -462,7 +480,7 @@ export function RestaurantProfileForm() {
               </select>
             </div>
             <div className="field">
-              <label>PIN Code</label>
+              <label>PIN Code <span className="req-mark">*</span></label>
               <input
                 value={form.pin}
                 placeholder="560001"
@@ -474,7 +492,7 @@ export function RestaurantProfileForm() {
 
         {/* Operating Hours */}
         <div className="form-section">
-          <h3>Operating Hours</h3>
+          <h3>Operating Hours <span className="req-mark">*</span></h3>
           <div className="hours-grid">
             {DAYS.map((d) => (
               <div className="hours-row" key={d.key}>
@@ -507,7 +525,7 @@ export function RestaurantProfileForm() {
               />
             </div>
             <div className="field">
-              <label>Email</label>
+              <label>Email <span className="req-mark">*</span></label>
               <input
                 type="email"
                 value={form.email}
@@ -540,6 +558,7 @@ export function RestaurantProfileForm() {
 
       <style>{`
         .profile-content { max-width: 900px; padding-bottom: 80px; }
+        .req-mark { color: var(--ember); font-weight: 700; }
 
         .cover-upload { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 200px; border: 2px dashed var(--sand); border-radius: var(--radius-lg); background: white; cursor: pointer; color: var(--stone); font-family: var(--font-body); font-size: 14px; font-weight: 600; transition: all 0.2s; }
         .cover-upload:hover { border-color: var(--ember); color: var(--ember); background: var(--ember-glow); }

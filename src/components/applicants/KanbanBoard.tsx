@@ -89,7 +89,12 @@ export function KanbanBoard({ jobId }: { jobId: string }) {
       />
 
       <style>{`
-        .kanban-board { display: flex; gap: 16px; overflow-x: auto; padding: 4px 0 20px; }
+        .kanban-board { display: flex; gap: 16px; overflow-x: auto; overflow-y: hidden; padding: 4px 4px 20px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; scroll-padding: 4px; }
+        .kanban-board > * { scroll-snap-align: start; }
+        .kanban-board::-webkit-scrollbar { height: 10px; }
+        .kanban-board::-webkit-scrollbar-track { background: var(--cream); border-radius: 100px; }
+        .kanban-board::-webkit-scrollbar-thumb { background: var(--sand); border-radius: 100px; }
+        .kanban-board::-webkit-scrollbar-thumb:hover { background: var(--charcoal-light); }
       `}</style>
     </>
   );

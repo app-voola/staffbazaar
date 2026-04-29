@@ -22,6 +22,7 @@ interface WorkExp {
 
 interface FormState {
   full_name: string;
+  age: string;
   role: string;
   salary_expected: number;
   skills: string[];
@@ -39,6 +40,7 @@ interface FormState {
 
 const EMPTY: FormState = {
   full_name: '',
+  age: '',
   role: 'Cooks & Chefs',
   salary_expected: 30000,
   skills: [],
@@ -183,6 +185,7 @@ export function WorkerProfileClient() {
 
       const hydrated: FormState = {
         full_name: (p?.full_name as string | null) ?? '',
+        age: p?.age != null ? String(p.age as number) : '',
         role: (p?.role as string | null) ?? 'Cooks & Chefs',
         salary_expected: (p?.salary_expected as number | null) ?? 30000,
         skills: (p?.skills as string[] | null) ?? [],
@@ -312,6 +315,35 @@ export function WorkerProfileClient() {
 
   const save = async () => {
     if (!user) return;
+
+    // Required fields per the worker dashboard spec: name, email, age, role, cities
+    if (!form.full_name.trim()) {
+      setToast('Full name is required');
+      setTimeout(() => setToast(''), 2500);
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      setToast('Enter a valid email address');
+      setTimeout(() => setToast(''), 2500);
+      return;
+    }
+    const ageNum = parseInt(form.age, 10);
+    if (!Number.isFinite(ageNum) || ageNum < 18 || ageNum > 70) {
+      setToast('Enter a valid age (18-70)');
+      setTimeout(() => setToast(''), 2500);
+      return;
+    }
+    if (!form.role.trim()) {
+      setToast('Pick the work you do');
+      setTimeout(() => setToast(''), 2500);
+      return;
+    }
+    if (form.cities.length === 0) {
+      setToast('Pick at least one city');
+      setTimeout(() => setToast(''), 2500);
+      return;
+    }
+
     setBusy(true);
 
     // Save experience: delete old, insert current
@@ -343,6 +375,7 @@ export function WorkerProfileClient() {
     const profileRow = {
       worker_id: user.id,
       full_name: form.full_name,
+      age: ageNum,
       role: form.role,
       salary_expected: form.salary_expected,
       skills: form.skills,
@@ -357,6 +390,10 @@ export function WorkerProfileClient() {
       notify_whatsapp: form.notify_whatsapp,
       notify_application_updates: form.notify_application_updates,
       experience_years: totalYears,
+      // Editing the full profile counts as completed onboarding so the
+      // (workers-end) layout never bounces a returning worker back into
+      // the create-profile wizard, even if they later clear a field.
+      onboarding_complete: true,
       updated_at: new Date().toISOString(),
     };
     const { error: pErr } = await supabase.from('worker_profiles').upsert(profileRow, { onConflict: 'worker_id' });
@@ -458,25 +495,32 @@ export function WorkerProfileClient() {
     }
     setAadhaarError('');
     try {
+      // facingMode is a soft hint so desktop webcams (no rear camera) still
+      // succeed instead of throwing OverconstrainedError.
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
+        video: { facingMode: { ideal: 'environment' } },
         audio: false,
       });
       cameraStreamRef.current = stream;
       setCameraActive(true);
-      // Assign on next tick so the <video> element is mounted
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(() => {});
-        }
-      }, 0);
+      // The <video> srcObject assignment happens in the effect below once
+      // the element actually mounts — setTimeout(0) was unreliable.
     } catch (err) {
       console.error('[aadhaar] camera start failed', err);
       setAadhaarError('Could not access camera. Use "From Gallery" instead.');
       setCameraActive(false);
     }
   };
+
+  // Wire the active stream onto the <video> as soon as it's mounted.
+  useEffect(() => {
+    if (!cameraActive) return;
+    const video = videoRef.current;
+    const stream = cameraStreamRef.current;
+    if (!video || !stream) return;
+    video.srcObject = stream;
+    video.play().catch((err) => console.error('[aadhaar] video.play failed', err));
+  }, [cameraActive]);
 
   const capturePhoto = () => {
     const video = videoRef.current;
@@ -662,12 +706,23 @@ export function WorkerProfileClient() {
               </div>
 
               <div className="field">
-                <label>{t('field_full_name')}</label>
+                <label>{t('field_full_name')} <span className="req-mark">*</span></label>
                 <input
                   type="text"
                   value={form.full_name}
                   onChange={(e) => update({ full_name: e.target.value })}
                   placeholder={t('placeholder_full_name')}
+                />
+              </div>
+              <div className="field">
+                <label>Age <span className="req-mark">*</span></label>
+                <input
+                  type="number"
+                  min={18}
+                  max={70}
+                  value={form.age}
+                  onChange={(e) => update({ age: e.target.value })}
+                  placeholder="e.g. 28"
                 />
               </div>
               <div className="field">
@@ -680,7 +735,7 @@ export function WorkerProfileClient() {
                 />
               </div>
               <div className="field">
-                <label>{t('field_email')}</label>
+                <label>{t('field_email')} <span className="req-mark">*</span></label>
                 <input
                   type="email"
                   value={form.email}
@@ -698,7 +753,7 @@ export function WorkerProfileClient() {
                 />
               </div>
 
-              <div className="section-title">{t('field_role')}</div>
+              <div className="section-title">{t('field_role')} <span className="req-mark">*</span></div>
               <button
                 type="button"
                 className="current-role"
@@ -969,7 +1024,7 @@ export function WorkerProfileClient() {
           {tab === 'cities' && (
             <section className="ep-panel">
               <div className="ep-panel-head">
-                <h2>{t('tab_cities')}</h2>
+                <h2>{t('tab_cities')} <span className="req-mark">*</span></h2>
                 <p>{t('cities_sub')}</p>
               </div>
               <div className="chip-selector">
@@ -1216,6 +1271,7 @@ export function WorkerProfileClient() {
 
       <style>{`
         .sb-page-wrap { max-width: 1100px; padding-bottom: 80px; }
+        .req-mark { color: var(--ember); font-weight: 700; }
         .sb-page-head { margin-bottom: 16px; }
         .sb-page-head-row { display: flex; justify-content: space-between; align-items: center; }
         .sb-page-head h1 { font-family: var(--font-display); font-size: 32px; }

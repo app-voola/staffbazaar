@@ -27,6 +27,7 @@ interface Message {
   from_me: boolean;
   text: string;
   created_at: string;
+  read_at: string | null;
 }
 
 type ConvFilter = 'all' | 'unread';
@@ -175,13 +176,20 @@ export function WorkerMessagesClient() {
     const [convRes, appsRes] = await Promise.all([
       supabase
         .from('conversations')
-        .select('id, name, restaurant_name, role, avatar, initials, last_message, time, unread, updated_at, owner_id')
+        .select('id, name, restaurant_name, role, avatar, initials, last_message, time, unread, unread_for_worker, updated_at, owner_id')
         .eq('worker_id', user.id)
         .order('updated_at', { ascending: false }),
       supabase.from('applicants').select('id', { count: 'exact', head: true }).eq('worker_id', user.id),
     ]);
 
-    const convs = (convRes.data ?? []) as Conversation[];
+    // Map per-worker unread counter into the shared `unread` field this
+    // component renders. Falls back to the legacy column for rows that
+    // predate the migration.
+    type RawConv = Conversation & { unread_for_worker?: number | null };
+    const convs = ((convRes.data ?? []) as RawConv[]).map((c) => ({
+      ...c,
+      unread: c.unread_for_worker ?? c.unread ?? 0,
+    }));
     setConversations(convs);
     setApplicationsCount(appsRes.count ?? 0);
 
@@ -208,7 +216,7 @@ export function WorkerMessagesClient() {
   const loadMessages = async (convId: string) => {
     const { data } = await supabase
       .from('messages')
-      .select('id, conversation_id, from_me, text, created_at')
+      .select('id, conversation_id, from_me, text, created_at, read_at')
       .eq('conversation_id', convId)
       .order('created_at', { ascending: true });
     setMessages((data ?? []) as Message[]);
@@ -238,6 +246,13 @@ export function WorkerMessagesClient() {
         }
         loadConversations();
       })
+      // UPDATE fires when the owner stamps read_at — used to flip the
+      // worker's "sent" tick to a read (double) tick in real time.
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (payload) => {
+        const m = payload.new as Message;
+        if (m.conversation_id !== activeIdRef.current) return;
+        setMessages((ms) => ms.map((x) => (x.id === m.id ? m : x)));
+      })
       .subscribe();
 
     return () => {
@@ -254,7 +269,23 @@ export function WorkerMessagesClient() {
     }
     loadMessages(activeId);
     if (user) {
-      supabase.from('conversations').update({ unread: 0 }).eq('id', activeId).eq('worker_id', user.id).then(() => {});
+      // Clear *only* the worker's badge for this conversation, and stamp
+      // owner-sent (from_me=true) messages as read so the owner sees the
+      // double-tick on their side.
+      const nowIso = new Date().toISOString();
+      Promise.all([
+        supabase
+          .from('conversations')
+          .update({ unread_for_worker: 0 })
+          .eq('id', activeId)
+          .eq('worker_id', user.id),
+        supabase
+          .from('messages')
+          .update({ read_at: nowIso })
+          .eq('conversation_id', activeId)
+          .eq('from_me', true)
+          .is('read_at', null),
+      ]).then(() => {});
     }
   }, [activeId, user?.id]);
 
@@ -332,23 +363,25 @@ export function WorkerMessagesClient() {
       from_me: false,
       text,
       created_at: new Date().toISOString(),
+      read_at: null,
     };
     setMessages((ms) => [...ms, msg]);
     await supabase.from('messages').insert({ id, conversation_id: activeConv.id, from_me: false, text });
 
-    // Increment unread so the owner's sidebar badge lights up on their end
+    // Bump the *owner's* unread counter only — the worker is the sender so
+    // their own badge must not change.
     const { data: convRow } = await supabase
       .from('conversations')
-      .select('unread')
+      .select('unread_for_owner')
       .eq('id', activeConv.id)
       .maybeSingle();
-    const nextUnread = (convRow?.unread ?? 0) + 1;
+    const nextOwnerUnread = (convRow?.unread_for_owner ?? 0) + 1;
 
     await supabase
       .from('conversations')
       .update({
         last_message: text,
-        unread: nextUnread,
+        unread_for_owner: nextOwnerUnread,
         updated_at: new Date().toISOString(),
       })
       .eq('id', activeConv.id);
@@ -511,12 +544,30 @@ export function WorkerMessagesClient() {
                   const cached = translationCache[cacheKey];
                   const isPending = translationPending.has(cacheKey);
                   const displayText = lang === 'en' ? m.text : cached ?? m.text;
+                  // The worker's own bubbles are `!m.from_me` ("sent" lane).
+                  // We render the read-receipt tick only on those bubbles.
+                  const workerSent = !m.from_me;
+                  const isRead = !!m.read_at;
                   return (
                     <div key={m.id} className={`chat-bubble ${m.from_me ? 'received' : 'sent'}`}>
                       <p>{displayText}</p>
                       <div className="bubble-meta">
                         <span className="bubble-time">{formatBubbleTime(m.created_at)}</span>
                         {isPending && <span className="bubble-translating">{t('msg_translating')}</span>}
+                        {workerSent && (
+                          <span className={`bubble-ticks${isRead ? ' read' : ''}`} aria-label={isRead ? 'Read' : 'Sent'}>
+                            {isRead ? (
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                                <polyline points="14.5 12.5 11 16 9.5 14.5" />
+                              </svg>
+                            ) : (
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            )}
+                          </span>
+                        )}
                       </div>
                     </div>
                   );
@@ -611,6 +662,9 @@ export function WorkerMessagesClient() {
         .bubble-meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
         .bubble-time { font-size: 10px; opacity: 0.7; }
         .bubble-translating { font-size: 10px; opacity: 0.7; font-style: italic; }
+        .bubble-ticks { display: inline-flex; }
+        .bubble-ticks svg { width: 14px; height: 12px; opacity: 0.7; }
+        .bubble-ticks.read svg { opacity: 1; color: #38BDF8; }
         .bubble-translate-btn { background: none; border: none; padding: 0; font-size: 11px; font-weight: 600; color: inherit; opacity: 0.8; cursor: pointer; font-family: var(--font-body); text-decoration: underline; }
         .bubble-translate-btn:hover { opacity: 1; }
         .chat-bubble.sent { align-self: flex-end; background: var(--ember); color: white; border-bottom-right-radius: 4px; }

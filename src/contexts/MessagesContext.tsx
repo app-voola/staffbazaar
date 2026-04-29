@@ -43,6 +43,8 @@ type ConversationRow = {
   last_message: string | null;
   time: string | null;
   unread: number | null;
+  unread_for_owner: number | null;
+  unread_for_worker: number | null;
   updated_at: string | null;
 };
 
@@ -53,6 +55,7 @@ type MessageRow = {
   text: string;
   time: string | null;
   created_at: string | null;
+  read_at: string | null;
 };
 
 function rowToMsg(r: MessageRow): MockMessage {
@@ -62,10 +65,15 @@ function rowToMsg(r: MessageRow): MockMessage {
     text: r.text,
     time: r.time ?? '',
     createdAt: r.created_at ?? undefined,
+    readAt: r.read_at ?? undefined,
   };
 }
 
 function rowToConv(r: ConversationRow, messages: MockMessage[]): MockConversation {
+  // The owner-side context renders the count owed to the *owner*. Falling
+  // back to the legacy single-column unread keeps pre-migration rows from
+  // showing 0 incorrectly.
+  const ownerUnread = r.unread_for_owner ?? r.unread ?? 0;
   return {
     id: r.id,
     name: r.name,
@@ -76,7 +84,7 @@ function rowToConv(r: ConversationRow, messages: MockMessage[]): MockConversatio
     lastMessage: r.last_message ?? '',
     time: r.time ?? '',
     updatedAt: r.updated_at ?? undefined,
-    unread: r.unread ?? 0,
+    unread: ownerUnread,
     messages,
   };
 }
@@ -228,20 +236,20 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
     });
     if (msgErr) console.error('[messages] insert failed', msgErr);
 
-    // Increment unread so the recipient's sidebar badge lights up
+    // Bump the *worker's* unread badge only — the owner is the sender so
+    // their own count must not change.
     const { data: convRow } = await supabase
       .from('conversations')
-      .select('unread, worker_id, name, restaurant_name')
+      .select('unread_for_worker, worker_id, name, restaurant_name')
       .eq('id', convId)
       .maybeSingle();
-    const nextUnread = (convRow?.unread ?? 0) + 1;
+    const nextWorkerUnread = (convRow?.unread_for_worker ?? 0) + 1;
 
     const { error: convErr } = await supabase
       .from('conversations')
       .update({
         last_message: text,
-        time: 'Just now',
-        unread: nextUnread,
+        unread_for_worker: nextWorkerUnread,
         updated_at: new Date().toISOString(),
       })
       .eq('id', convId);
@@ -262,8 +270,20 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
 
   const markRead = useCallback<MessagesContextValue['markRead']>(async (convId) => {
     setConversations((prev) => prev.map((c) => (c.id === convId ? { ...c, unread: 0 } : c)));
-    const { error } = await supabase.from('conversations').update({ unread: 0 }).eq('id', convId);
-    if (error) console.error('[conversations] markRead failed', error);
+    const nowIso = new Date().toISOString();
+    // Reset *only* the owner's badge, and stamp inbound (from_me=false)
+    // messages as read so the worker sees the double-tick on their side.
+    const [{ error: convErr }, { error: msgErr }] = await Promise.all([
+      supabase.from('conversations').update({ unread_for_owner: 0 }).eq('id', convId),
+      supabase
+        .from('messages')
+        .update({ read_at: nowIso })
+        .eq('conversation_id', convId)
+        .eq('from_me', false)
+        .is('read_at', null),
+    ]);
+    if (convErr) console.error('[conversations] markRead failed', convErr);
+    if (msgErr) console.error('[messages] mark read_at failed', msgErr);
   }, []);
 
   const startChat = useCallback<MessagesContextValue['startChat']>(

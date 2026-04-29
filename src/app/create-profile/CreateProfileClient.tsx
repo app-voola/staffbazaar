@@ -62,17 +62,18 @@ export function CreateProfileClient() {
     let cancelled = false;
     supabase
       .from('worker_profiles')
-      .select('full_name, role, cities')
+      .select('onboarding_complete, full_name, role, cities')
       .eq('worker_id', user.id)
       .maybeSingle()
       .then(({ data }) => {
         if (cancelled) return;
         const done =
-          !!data &&
-          !!(data.full_name as string | null)?.trim() &&
-          !!(data.role as string | null) &&
-          Array.isArray(data.cities) &&
-          (data.cities as string[]).length > 0;
+          data?.onboarding_complete === true ||
+          (!!data &&
+            !!(data.full_name as string | null)?.trim() &&
+            !!(data.role as string | null) &&
+            Array.isArray(data.cities) &&
+            (data.cities as string[]).length > 0);
         if (done) router.replace('/worker-dashboard');
       });
     return () => {
@@ -115,6 +116,9 @@ export function CreateProfileClient() {
         cities,
         city: cities[0] ?? null,
         looking_for_work: true,
+        // Mark onboarding done so the layout guard never sends a returning
+        // worker back into this wizard — even if they later clear fields.
+        onboarding_complete: true,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'worker_id' },
