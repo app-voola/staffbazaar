@@ -69,19 +69,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
     };
 
+    // Pulls the saved full_name from `profiles` so an owner editing their
+    // name on /profile is reflected on the dashboard greeting (the auth
+    // metadata copy stays the original signup value otherwise).
+    const loadProfileName = async (ownerId: string): Promise<string | null> => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('owner_id', ownerId)
+        .maybeSingle();
+      if (error) {
+        console.error('[auth] profile name load failed', error);
+        return null;
+      }
+      const v = (data?.full_name as string | null)?.trim();
+      return v ? v : null;
+    };
+
     (async () => {
       const { data, error } = await supabase.auth.getSession();
       if (cancelled) return;
       if (error) console.error('[auth] getSession failed', error);
       const mock = toMockUser(data.session?.user ?? null);
       setUser(mock);
-      // Unblock the UI immediately — restaurant load happens in the
-      // background so a slow/failed lookup can't strand the layout on
-      // its "Loading…" screen.
+      // Unblock the UI immediately — restaurant + profile-name loads happen
+      // in the background so a slow/failed lookup can't strand the layout
+      // on its "Loading…" screen.
       setLoading(false);
       if (mock) {
         loadRestaurant(mock.id).then((rest) => {
           if (!cancelled) setRestaurant(rest);
+        });
+        loadProfileName(mock.id).then((name) => {
+          if (cancelled || !name) return;
+          setUser((u) => (u ? { ...u, full_name: name } : u));
         });
       }
     })();
@@ -92,6 +113,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (mock) {
         loadRestaurant(mock.id).then((rest) => {
           if (!cancelled) setRestaurant(rest);
+        });
+        loadProfileName(mock.id).then((name) => {
+          if (cancelled || !name) return;
+          setUser((u) => (u ? { ...u, full_name: name } : u));
         });
       } else {
         setRestaurant(null);
@@ -104,14 +129,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Keep the restaurant in sync when the owner edits their profile
+  // Keep restaurant + owner full_name in sync when those rows change
   useEffect(() => {
     if (!user) return;
+    const userId = user.id;
     const ch = supabase
-      .channel(`auth-restaurant-${user.id}`)
+      .channel(`auth-owner-${userId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'restaurants', filter: `owner_id=eq.${user.id}` },
+        { event: '*', schema: 'public', table: 'restaurants', filter: `owner_id=eq.${userId}` },
         (payload) => {
           if (payload.eventType === 'DELETE') {
             setRestaurant(null);
@@ -120,11 +146,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const row = payload.new as Record<string, unknown>;
           setRestaurant({
             id: (row.id as string) ?? '',
-            owner_id: (row.owner_id as string) ?? user.id,
+            owner_id: (row.owner_id as string) ?? userId,
             name: (row.name as string) ?? '',
             type: (row.type as string) ?? '',
             city: (row.city as string) ?? '',
           });
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles', filter: `owner_id=eq.${userId}` },
+        (payload) => {
+          if (payload.eventType === 'DELETE') return;
+          const row = payload.new as Record<string, unknown>;
+          const name = (row.full_name as string | null)?.trim();
+          if (!name) return;
+          setUser((u) => (u && u.id === userId ? { ...u, full_name: name } : u));
         },
       )
       .subscribe();

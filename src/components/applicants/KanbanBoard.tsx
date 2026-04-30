@@ -56,29 +56,31 @@ export function KanbanBoard({ jobId }: { jobId: string }) {
 
   return (
     <>
-      <div className="kanban-board">
-        {STAGES.map((s) => {
-          const cards = byJobAndStage(jobId, s.key);
-          return (
-            <KanbanColumn
-              key={s.key}
-              stage={s.key}
-              title={s.title}
-              count={cards.length}
-              onDrop={handleDrop}
-            >
-              {cards.map((a) => (
-                <KanbanCard
-                  key={a.id}
-                  applicant={a}
-                  onDragStart={setDraggedId}
-                  onMoveNext={(id) => moveTo(id, NEXT[a.stage])}
-                  onHireRequest={requestHire}
-                />
-              ))}
-            </KanbanColumn>
-          );
-        })}
+      <div className="kanban-scroll">
+        <div className="kanban-board">
+          {STAGES.map((s) => {
+            const cards = byJobAndStage(jobId, s.key);
+            return (
+              <KanbanColumn
+                key={s.key}
+                stage={s.key}
+                title={s.title}
+                count={cards.length}
+                onDrop={handleDrop}
+              >
+                {cards.map((a) => (
+                  <KanbanCard
+                    key={a.id}
+                    applicant={a}
+                    onDragStart={setDraggedId}
+                    onMoveNext={(id) => moveTo(id, NEXT[a.stage])}
+                    onHireRequest={requestHire}
+                  />
+                ))}
+              </KanbanColumn>
+            );
+          })}
+        </div>
       </div>
 
       <HireConfirmModal
@@ -89,12 +91,17 @@ export function KanbanBoard({ jobId }: { jobId: string }) {
       />
 
       <style>{`
-        .kanban-board { display: flex; gap: 16px; overflow-x: auto; overflow-y: hidden; padding: 4px 4px 20px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; scroll-padding: 4px; }
+        /* Outer wrapper owns the horizontal scrollbar so it stays visible
+           regardless of the parent layout's max-width. */
+        .kanban-scroll { width: 100%; overflow-x: auto; overflow-y: visible; padding-bottom: 12px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+        .kanban-scroll::-webkit-scrollbar { height: 10px; }
+        .kanban-scroll::-webkit-scrollbar-track { background: var(--cream); border-radius: 100px; }
+        .kanban-scroll::-webkit-scrollbar-thumb { background: var(--sand); border-radius: 100px; }
+        .kanban-scroll::-webkit-scrollbar-thumb:hover { background: var(--charcoal-light); }
+        /* min-width forces all 4 columns + gaps to render at full size,
+           guaranteeing the outer wrapper overflows even on 13" laptops. */
+        .kanban-board { display: flex; gap: 16px; padding: 4px 4px 8px; min-width: max-content; }
         .kanban-board > * { scroll-snap-align: start; }
-        .kanban-board::-webkit-scrollbar { height: 10px; }
-        .kanban-board::-webkit-scrollbar-track { background: var(--cream); border-radius: 100px; }
-        .kanban-board::-webkit-scrollbar-thumb { background: var(--sand); border-radius: 100px; }
-        .kanban-board::-webkit-scrollbar-thumb:hover { background: var(--charcoal-light); }
       `}</style>
     </>
   );
