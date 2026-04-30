@@ -196,8 +196,8 @@ export function CandidateClient({ workerId }: { workerId: string }) {
       <div className="detail-cols">
         <div>
           <ExperienceTimeline items={profile.experience} />
-          <RatingCard />
-          <NotesCard />
+          <RatingCard workerId={workerId} />
+          <NotesCard workerId={workerId} />
         </div>
         <aside>
           <ContactSideCard worker={worker} profile={profile} />
