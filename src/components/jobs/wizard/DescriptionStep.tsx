@@ -97,13 +97,12 @@ export function DescriptionStep({
         </svg>
       </div>
       <h2>Job description</h2>
-      <p className="step-desc">We&apos;ve pre-filled a template. Edit it to match your needs.</p>
-      <div className="field">
-        <label>Description</label>
+      <div className="field" style={{ marginTop: 12 }}>
         <textarea
           rows={10}
           value={data.description}
           onChange={(e) => onChange({ description: e.target.value })}
+          placeholder="Pre-filled from your selected role — edit to match your needs."
           style={{ resize: 'vertical', lineHeight: 1.7 }}
         />
         <div style={{ fontSize: 12, color: 'var(--stone)', textAlign: 'right', marginTop: 4 }}>
