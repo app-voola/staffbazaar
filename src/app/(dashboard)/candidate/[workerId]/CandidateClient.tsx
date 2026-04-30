@@ -29,6 +29,7 @@ interface WorkerProfileRow {
   salary_expected: number | null;
   looking_for_work: boolean | null;
   aadhaar_status: string | null;
+  background_check_status: string | null;
   avatar_url: string | null;
 }
 
@@ -104,7 +105,7 @@ export function CandidateClient({ workerId }: { workerId: string }) {
       verifications: {
         aadhaar: row.aadhaar_status === 'verified',
         phone: !!row.phone,
-        background: false,
+        background: ((row.background_check_status as 'none' | 'pending' | 'verified' | null) ?? 'none'),
       },
       willingStates: row.cities ?? [],
     };

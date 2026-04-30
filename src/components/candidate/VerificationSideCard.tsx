@@ -3,9 +3,24 @@
 import type { WorkerProfileDetail } from '@/services/mock/workerProfiles';
 
 export function VerificationSideCard({ profile }: { profile: WorkerProfileDetail }) {
-  const items = [
-    { ok: profile.verifications.aadhaar, label: 'Aadhaar Verified', sub: 'Identity confirmed' },
-    { ok: profile.verifications.phone, label: 'Phone Verified', sub: 'Number confirmed' },
+  const bg = profile.verifications.background;
+  type Tri = 'yes' | 'pending' | 'no';
+  const items: { state: Tri; label: string; sub: string }[] = [
+    {
+      state: profile.verifications.aadhaar ? 'yes' : 'no',
+      label: 'Aadhaar Verified',
+      sub: profile.verifications.aadhaar ? 'Identity confirmed' : 'Not yet uploaded',
+    },
+    {
+      state: profile.verifications.phone ? 'yes' : 'no',
+      label: 'Phone Verified',
+      sub: profile.verifications.phone ? 'Number confirmed' : 'Not yet provided',
+    },
+    {
+      state: bg === 'verified' ? 'yes' : bg === 'pending' ? 'pending' : 'no',
+      label: 'Background Check',
+      sub: bg === 'verified' ? 'Cleared' : bg === 'pending' ? 'Review in progress' : 'Not yet completed',
+    },
   ];
 
   return (
@@ -13,7 +28,9 @@ export function VerificationSideCard({ profile }: { profile: WorkerProfileDetail
       <div className="side-card-title">🛡 Verification</div>
       {items.map((it, i) => (
         <div key={i} className="side-verify-row">
-          <div className={`sv-icon ${it.ok ? 'yes' : 'no'}`}>{it.ok ? '✓' : '✕'}</div>
+          <div className={`sv-icon ${it.state}`}>
+            {it.state === 'yes' ? '✓' : it.state === 'pending' ? '…' : '✕'}
+          </div>
           <div className="sv-label">
             {it.label}
             <small>{it.sub}</small>
@@ -29,6 +46,7 @@ export function VerificationSideCard({ profile }: { profile: WorkerProfileDetail
         .sv-icon { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 13px; font-weight: 700; }
         .sv-icon.yes { background: var(--green-light); color: var(--green-dark); }
         .sv-icon.no { background: #FEE2E2; color: #DC2626; }
+        .sv-icon.pending { background: #FEF3C7; color: #92400E; }
         .sv-label { font-size: 13px; color: var(--charcoal); font-weight: 600; }
         .sv-label small { display: block; font-size: 11px; color: var(--stone); font-weight: 500; margin-top: 1px; }
       `}</style>

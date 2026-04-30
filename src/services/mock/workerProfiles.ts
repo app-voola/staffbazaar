@@ -5,6 +5,8 @@ export interface WorkExperience {
   date: string;
 }
 
+export type BackgroundCheckStatus = 'none' | 'pending' | 'verified';
+
 export interface WorkerProfileDetail {
   workerId: string;
   area: string;
@@ -12,7 +14,7 @@ export interface WorkerProfileDetail {
   cuisines: { name: string; years: number }[];
   experience: WorkExperience[];
   email: string;
-  verifications: { aadhaar: boolean; phone: boolean; background: boolean };
+  verifications: { aadhaar: boolean; phone: boolean; background: BackgroundCheckStatus };
   willingStates: string[];
 }
 
@@ -29,7 +31,7 @@ const DEFAULT: Omit<WorkerProfileDetail, 'workerId'> = {
     { years: 2, role: 'Line Cook', place: 'Café Madras, Bangalore', date: 'Jan 2020 — Dec 2021' },
   ],
   email: 'worker@staffbazaar.in',
-  verifications: { aadhaar: true, phone: true, background: false },
+  verifications: { aadhaar: true, phone: true, background: 'none' },
   willingStates: ['Maharashtra', 'Karnataka', 'Goa'],
 };
 

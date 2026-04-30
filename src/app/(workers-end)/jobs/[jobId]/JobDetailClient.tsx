@@ -18,6 +18,7 @@ interface Job {
   job_type: string | null;
   tips: boolean | null;
   description: string | null;
+  custom_details: string | null;
   owner_id: string;
   created_at: string;
 }
@@ -64,7 +65,7 @@ export function JobDetailClient({ jobId }: { jobId: string }) {
     const load = async () => {
       const { data: j } = await supabase
         .from('jobs')
-        .select('id, title, role, salary_min, salary_max, shift, job_type, tips, description, owner_id, created_at')
+        .select('id, title, role, salary_min, salary_max, shift, job_type, tips, description, custom_details, owner_id, created_at')
         .eq('id', jobId)
         .maybeSingle();
       if (cancelled) return;
@@ -255,6 +256,13 @@ export function JobDetailClient({ jobId }: { jobId: string }) {
             <div className="info-section">
               <div className="info-section-title">{t('jd_description')}</div>
               <p className="job-desc">{job.description}</p>
+            </div>
+          )}
+
+          {job.custom_details && job.custom_details.trim() && (
+            <div className="info-section">
+              <div className="info-section-title">Additional Details</div>
+              <p className="job-desc">{job.custom_details}</p>
             </div>
           )}
 

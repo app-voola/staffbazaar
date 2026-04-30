@@ -43,6 +43,7 @@ type JobRow = {
   job_type: string | null;
   tips: boolean | null;
   description: string | null;
+  custom_details: string | null;
   created_at: string | null;
 };
 
@@ -70,6 +71,7 @@ function rowToJob(r: JobRow): MockJob {
     jobType: r.job_type ?? '',
     tips: r.tips ?? false,
     description: r.description ?? '',
+    customDetails: r.custom_details ?? '',
   };
 }
 
@@ -89,6 +91,7 @@ function jobToRow(j: Partial<MockJob>): Partial<JobRow> {
   if (j.jobType !== undefined) row.job_type = j.jobType;
   if (j.tips !== undefined) row.tips = j.tips;
   if (j.description !== undefined) row.description = j.description;
+  if (j.customDetails !== undefined) row.custom_details = j.customDetails;
   return row;
 }
 

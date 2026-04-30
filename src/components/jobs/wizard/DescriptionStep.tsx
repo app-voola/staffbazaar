@@ -101,13 +101,29 @@ export function DescriptionStep({
       <div className="field">
         <label>Description</label>
         <textarea
-          rows={12}
+          rows={10}
           value={data.description}
           onChange={(e) => onChange({ description: e.target.value })}
           style={{ resize: 'vertical', lineHeight: 1.7 }}
         />
         <div style={{ fontSize: 12, color: 'var(--stone)', textAlign: 'right', marginTop: 4 }}>
           {wordCount} words {wordCount < 30 && <span style={{ color: '#DC2626' }}>(min 30)</span>}
+        </div>
+      </div>
+
+      <div className="field" style={{ marginTop: 18 }}>
+        <label>
+          Custom Details <span style={{ color: 'var(--stone)', fontWeight: 500 }}>(optional)</span>
+        </label>
+        <textarea
+          rows={5}
+          value={data.customDetails}
+          onChange={(e) => onChange({ customDetails: e.target.value })}
+          placeholder="Anything specific to your restaurant — parking, meals provided, dress code, perks, contact preferences…"
+          style={{ resize: 'vertical', lineHeight: 1.6 }}
+        />
+        <div style={{ fontSize: 12, color: 'var(--stone)', marginTop: 4 }}>
+          Shown alongside the description on the job detail page.
         </div>
       </div>
     </div>

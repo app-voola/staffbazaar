@@ -15,6 +15,7 @@ export interface MockJob {
   jobType: string;
   tips: boolean;
   description: string;
+  customDetails?: string;
 }
 
 export const seedJobs: MockJob[] = [

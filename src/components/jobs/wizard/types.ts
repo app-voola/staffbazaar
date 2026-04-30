@@ -2,6 +2,7 @@ export interface WizardData {
   role: string;
   specs: string[];
   description: string;
+  customDetails: string;
   salaryMin: string;
   salaryMax: string;
   shift: string;
@@ -13,6 +14,7 @@ export const initialWizard: WizardData = {
   role: '',
   specs: [],
   description: '',
+  customDetails: '',
   salaryMin: '',
   salaryMax: '',
   shift: '',

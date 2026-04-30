@@ -44,6 +44,7 @@ export function PostJobWizard() {
         jobType: data.jobType,
         tips: data.tips,
         description: data.description,
+        customDetails: data.customDetails,
       },
       { consumeQuota: status === 'active' },
     );
